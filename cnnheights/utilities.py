@@ -33,26 +33,6 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
 
     return height
 
-    # meta data in mosaic file is half-true, half-ommission (accounts for only one of the cut lines)
-    # the geometry file will tell you meta data per satilite image that was incorporated into the satilte tile
-    # hence, I should probably 
-    # technically can be arbitrary number of satilite images that overlap 
-    # zip archive of cutline data, so I can incorporate this into my pipeline for getting lat/longs
-    # will be interesting algo optimization 
-    # good for parallelizing 
-    # slow part could be assosc between cutline and satilite geometry (two trees next to eachother, but diff sun satilite geos)
-
-    # past approach: used a regression to map poly to a geo that represesented the shadow ... 
-    # polynomial was really brittle...benefit of using CNN
-    # construct good training set....geo is more or less solved?
-    # shadow length: take length of shadow in length of sun. 
-
-    # weekend: finish transitioning old library 
-        # he'll send me geo file, I'll work with it (he calls it a cut line file)
-        # he'll send resources about previous approach (doesn't seem like good use of time to look through rough code)
-    
-    # don't work on parrelization rn, just work on getting preprocessing back and working (on this computer!)
-
 def image_normalize(im, axis = (0,1), c = 1e-8):
     r'''Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
