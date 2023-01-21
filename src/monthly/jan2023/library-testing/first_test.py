@@ -1,6 +1,7 @@
 import os 
 from cnnheights import preprocess
 from time import time 
+import numpy as np
 
 top_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/data/old/july2022-testing-input/'
 
@@ -9,7 +10,7 @@ pan = []
 backgrounds = []
 annotations = [] 
 
-for i in os.listdir(top_dir): 
+for i in np.sort(os.listdir(top_dir)): 
     path = top_dir+i
     if 'ndvi' in i: 
         ndvi.append(path)
@@ -22,6 +23,12 @@ for i in os.listdir(top_dir):
 
     elif 'annotations' in i: 
         annotations.append(path) 
+
+def file_only(fp): 
+    return fp.split('/')[-1]
+
+#for i in range(len(ndvi)):
+#    print([file_only(j) for j in [ndvi[i], pan[i], backgrounds[i], annotations[i]]])
 
 out_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/output/'
 

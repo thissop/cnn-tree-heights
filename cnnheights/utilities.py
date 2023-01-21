@@ -97,7 +97,7 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         
         allAreas = set(areasWithPolygons.keys())
         if allAreas.difference(overlapppedAreas):
-            print(f'Warning: Could not find a raw image correspoinding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
+            print(f'Warning: Could not find a raw image corresponding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
 
 def divide_training_polygons(trainingPolygon, trainingArea, show_boundaries_during_processing:bool):
     '''
@@ -171,7 +171,7 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
     return(writeCounter, overlapppedAreas)
 
 def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imagesFilename, annotationFilename, boundaryFilename, bands, writeCounter, normalize=True):
-    """w
+    """
     Write the part of raw image that overlaps with a training area into a separate image file. 
     Use rowColPolygons to create and write annotation and boundary image from polygons in the training area.
     Note: original name was: writeExtractedImageAndAnnotation

@@ -7,24 +7,25 @@ def preprocess(area_files:list,
                show_boundaries_during_preprocessing:bool=False): 
 
     r'''
-    _Short Description_  
+    _Prepare all the standardized training data for the CNN. Extracts annotations, boundaries, nvdi images, and pan images._  
 
     Parameters
     ----------      
 
-    variable_name : `type`
-        Description
+    area_files : list
+    annotation_files : `list`  
+    raw_ndvi_images : `list` 
+    raw_pan_images : `list` 
+    output_path : `str`
+        Output path for all the extracted files to be saved to. Should be Linux/Mac style, and last character should be forward slash `/` 
+    bands : `list`
+        Default is [0]. 
+    show_boundaries_during_preprocessing : `bool`
 
-    Returns
-    -------
-
-    variable_name : `type`
-        Description 
-
-    TO DO 
+    Notes
     -----
-
-    - I want the the area and annotation files (as well as their images) to be forced to listed in same orders in list! I hate the annoying index thing! 
+    
+    - The corresponding files in the area_files, annotation_files, raw_ndvi_images, and raw_pan_images lists need to all be in the same order index wise.  
 
     '''
 
