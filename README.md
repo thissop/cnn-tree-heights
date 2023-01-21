@@ -48,6 +48,12 @@ variable_name : `type`
 │   │   └── sort-requirements.py
 │   ├── main.py
 │   ├── old main.py
+│   ├── original_core
+│   │   ├── UNet.py
+│   │   ├── __init__.py
+│   │   ├── frame_utilities.py
+│   │   ├── losses.py
+│   │   └── optimizers.py
 │   └── utilities.py
 ├── data
 │   ├── jesse
@@ -255,6 +261,8 @@ variable_name : `type`
 │           ├── thaddaeus_vector_rectangle_7.gpkg
 │           ├── thaddaeus_vector_rectangle_8.gpkg
 │           └── thaddaeus_vector_rectangle_9.gpkg
+├── notes
+│   └── 1-20-2023.txt
 ├── requirements.txt
 ├── setup.py
 ├── src
@@ -320,7 +328,8 @@ variable_name : `type`
 │           │   ├── first-zennith.py
 │           │   └── height-from-shadow.py
 │           └── library-testing
-│               ├── first_test.py
+│               ├── first_preprocess_test.py
+│               ├── first_training_test.py
 │               └── output
 │                   ├── extracted_annotation_0.png
 │                   ├── extracted_annotation_1.png
@@ -364,5 +373,5 @@ variable_name : `type`
 │                   └── extracted_pan_9.png
 └── temp.txt
 
-29 directories, 298 files
+31 directories, 305 files
 ```

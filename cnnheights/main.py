@@ -9,7 +9,7 @@ def preprocess(area_files:list,
     r'''
     _Prepare all the standardized training data for the CNN. Extracts annotations, boundaries, nvdi images, and pan images._  
 
-    Parameters
+    Arguments
     ----------      
 
     area_files : list
@@ -24,7 +24,7 @@ def preprocess(area_files:list,
 
     Notes
     -----
-    
+
     - The corresponding files in the area_files, annotation_files, raw_ndvi_images, and raw_pan_images lists need to all be in the same order index wise.  
 
     '''
@@ -78,6 +78,36 @@ def preprocess(area_files:list,
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
                                                 boundaryFilename='extracted_boundary', bands=bands)
 
+def train_cnn(ndvi_images:list,
+          pan_images:list, 
+          annotations:list,
+          boundaries:list): 
 
-def train(): 
-    pass 
+    r'''
+    
+    __Train the UNET CNN on the extracted data__
+
+    Arguments 
+    ---------
+
+    ndvi_images : list 
+        List of full file paths to the extracted ndvi images 
+
+    pan_images : list 
+        Same as ndvi_images except for pan 
+
+    boundaries : list
+        List of boundary files extracted during the preproccessing step 
+
+    annotations : list
+        List of the full file paths to the extracted annotations outputed during the preproccessing step. 
+    
+    '''
+        
+    from trees_core.training_utilities import load_train_test, train_model
+    
+    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries)
+
+    model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator)
+
+    return model, loss_history
