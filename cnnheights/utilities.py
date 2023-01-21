@@ -57,7 +57,7 @@ def image_normalize(im, axis = (0,1), c = 1e-8):
     r'''Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
 
-def extract_overlapping(i, inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
+def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
     """
     Iterates over raw ndvi and pan images and using find_overlap() extract areas that overlap with training data. The overlapping areas in raw images are written in a separate file, and annotation and boundary file are created from polygons in the overlapping areas.
     Note that the intersection with the training areas is performed independently for raw ndvi and pan images. This is not an ideal solution and it can be combined in the future.
@@ -72,30 +72,32 @@ def extract_overlapping(i, inputImages, allAreasWithPolygons, writePath, bands, 
 
     if not os.path.exists(writePath):
         os.makedirs(writePath)
-        
-    inputImages = inputImages[i]
-    areasWithPolygons=allAreasWithPolygons[i]
-    writeCounter=i 
-
-    overlapppedAreas = set()                   
-    ndviImg = rasterio.open(inputImages[0])
-    panImg = rasterio.open(inputImages[1])
-
-    ncndvi,imOverlapppedAreasNdvi = find_overlap(ndviImg, areasWithPolygons, writePath=writePath, imageFilename=[ndviFilename], annotationFilename=annotationFilename, boundaryFilename=boundaryFilename, bands=bands, writeCounter=writeCounter)
-    ncpan, imOverlapppedAreasPan = find_overlap(panImg, areasWithPolygons, writePath=writePath, imageFilename=[panFilename], annotationFilename='', boundaryFilename='', bands=bands, writeCounter=writeCounter)
-    if ncndvi != ncpan:
-         
-        print(ncndvi)
-        print(ncpan)  
-        raise Exception('Couldnt create mask!!!')
-
-    if overlapppedAreas.intersection(imOverlapppedAreasNdvi):
-        print(f'Information: Training area(s) {overlapppedAreas.intersection(imOverlapppedAreasNdvi)} spans over multiple raw images. This is common and expected in many cases. A part was found to overlap with current input image.')
-    overlapppedAreas.update(imOverlapppedAreasNdvi)
     
-    allAreas = set(areasWithPolygons.keys())
-    if allAreas.difference(overlapppedAreas):
-        print(f'Warning: Could not find a raw image correspoinding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
+    for i in range(len(inputImages)): 
+
+        input_images = inputImages[i]
+        areasWithPolygons=allAreasWithPolygons[i]
+        writeCounter=i 
+
+        overlapppedAreas = set()                   
+        ndviImg = rasterio.open(input_images[0])
+        panImg = rasterio.open(input_images[1])
+
+        ncndvi,imOverlapppedAreasNdvi = find_overlap(ndviImg, areasWithPolygons, writePath=writePath, imageFilename=[ndviFilename], annotationFilename=annotationFilename, boundaryFilename=boundaryFilename, bands=bands, writeCounter=writeCounter)
+        ncpan, imOverlapppedAreasPan = find_overlap(panImg, areasWithPolygons, writePath=writePath, imageFilename=[panFilename], annotationFilename='', boundaryFilename='', bands=bands, writeCounter=writeCounter)
+        if ncndvi != ncpan:
+            
+            print(ncndvi)
+            print(ncpan)  
+            raise Exception('Couldnt create mask!!!')
+
+        if overlapppedAreas.intersection(imOverlapppedAreasNdvi):
+            print(f'Information: Training area(s) {overlapppedAreas.intersection(imOverlapppedAreasNdvi)} spans over multiple raw images. This is common and expected in many cases. A part was found to overlap with current input image.')
+        overlapppedAreas.update(imOverlapppedAreasNdvi)
+        
+        allAreas = set(areasWithPolygons.keys())
+        if allAreas.difference(overlapppedAreas):
+            print(f'Warning: Could not find a raw image correspoinding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
 
 def divide_training_polygons(trainingPolygon, trainingArea, show_boundaries_during_processing:bool):
     '''
