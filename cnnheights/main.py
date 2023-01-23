@@ -96,7 +96,7 @@ def train_cnn(ndvi_images:list,
     pan_images : list 
         Same as ndvi_images except for pan 
 
-    boundaries : list
+    boundaries : list 
         List of boundary files extracted during the preproccessing step 
 
     annotations : list
