@@ -319,6 +319,8 @@ def load_train_test(ndvi_images:list,
     import rasterio 
     import numpy as np
     from PIL import Image
+    from PIL import ImageFile
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
     from cnnheights.original_core.frame_utilities import FrameInfo, split_dataset
     from cnnheights.original_core.dataset_generator import DataGenerator
 
@@ -355,7 +357,6 @@ def train_model(train_generator, val_generator,
                 BATCH_SIZE = 8, NB_EPOCHS = 200, VALID_IMG_COUNT = 200, MAX_TRAIN_STEPS = 1000,
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
                 model_path = './saved_models/UNet/'): 
-    
     from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity 
     from cnnheights.original_core.optimizers import adaDelta 
     import time 
@@ -363,7 +364,6 @@ def train_model(train_generator, val_generator,
     from cnnheights.original_core.UNet import UNet 
     from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, ReduceLROnPlateau, TensorBoard
     import os 
-
 
     OPTIMIZER = adaDelta
     LOSS = tversky 
@@ -401,7 +401,6 @@ def train_model(train_generator, val_generator,
 
     # Define callbacks for the early stopping of training, LearningRateScheduler and model checkpointing
 
-
     checkpoint = ModelCheckpoint(model_path, monitor='val_loss', verbose=1, 
                                 save_best_only=True, mode='min', save_weights_only = False)
 
@@ -420,6 +419,9 @@ def train_model(train_generator, val_generator,
     callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
 
     # do training 
+
+    # last line: PROBLEMS START HERE!
+
     loss_history = [model.fit(train_generator, 
                             steps_per_epoch=MAX_TRAIN_STEPS, 
                             epochs=NB_EPOCHS, 

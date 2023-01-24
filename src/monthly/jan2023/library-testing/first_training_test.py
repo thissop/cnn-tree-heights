@@ -7,7 +7,7 @@ pan_images = []
 annotations = []
 boundaries = []
 
-data_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/output/'
+data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
 for file in np.sort(os.listdir(data_dir)):
     full_path = data_dir+file
     if '.png' in file: 
