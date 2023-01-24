@@ -104,7 +104,7 @@ def train_cnn(ndvi_images:list,
     
     '''
         
-    from trees_core.training_utilities import load_train_test, train_model
+    from cnnheights.utilities import load_train_test, train_model
     
     train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries)
 

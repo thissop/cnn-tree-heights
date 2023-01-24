@@ -315,6 +315,7 @@ def load_train_test(ndvi_images:list,
     
     '''
 
+    import os
     import rasterio 
     import numpy as np
     from PIL import Image

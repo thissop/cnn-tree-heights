@@ -15,15 +15,15 @@ for file in np.sort(os.listdir(data_dir)):
             annotations.append(full_path) 
 
         elif 'boundary' in file: 
-            boundaries.append(full_path)
+            boundaries.append(full_path) 
 
         elif 'ndvi' in file: 
-            ndvi_images.append(full_path)
+            ndvi_images.append(full_path) 
 
         elif 'extracted_pan' in file: 
             pan_images.append(full_path) 
 
-for i in [ndvi_images, pan_images, annotations, boundaries]:
+for i in [ndvi_images, pan_images, annotations, boundaries]: 
     print(len(i))
 
 train_cnn(ndvi_images, pan_images, annotations, boundaries)
