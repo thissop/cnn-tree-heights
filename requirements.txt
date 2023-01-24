@@ -1,7 +1,10 @@
+geopandas
+imgaug
+matplotlib
 numpy
 pandas
-matplotlib
+pvlib
+rasterio
 scikit-learn
 seaborn
-statsmodels
-pvlib
+shapely
