@@ -3,7 +3,7 @@ from cnnheights import preprocess
 from time import time 
 import numpy as np
 
-top_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/data/old/july2022-testing-input/'
+top_dir = '/Users/yaroslav/Documents/Work/NASA/data/old/july2022-testing-input/'
 
 ndvi = []
 pan = []
@@ -30,7 +30,7 @@ def file_only(fp):
 #for i in range(len(ndvi)):
 #    print([file_only(j) for j in [ndvi[i], pan[i], backgrounds[i], annotations[i]]])
 
-out_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/output/'
+out_dir = '/Users/yaroslav/Documents/Work/NASA/data/my current/cnn-input/'
 
 for i in os.listdir(out_dir):
     os.remove(out_dir+i)
