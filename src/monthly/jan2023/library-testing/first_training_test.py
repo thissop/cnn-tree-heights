@@ -4,7 +4,7 @@ import numpy as np
 
 ndvi_images = []
 pan_images = [] 
-annotations = []
+annotations = [] 
 boundaries = []
 
 data_dir = '/Users/yaroslav/Documents/Work/NASA/data/my current/cnn-input/'

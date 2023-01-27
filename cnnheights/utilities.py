@@ -441,7 +441,7 @@ def train_model(train_generator, val_generator,
 
     callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
 
-    # do training 
+    # do training  
 
     # last line: PROBLEMS START HERE!
 
@@ -450,6 +450,6 @@ def train_model(train_generator, val_generator,
                             epochs=NB_EPOCHS, 
                             validation_data=val_generator,
                             validation_steps=VALID_IMG_COUNT,
-                            callbacks=callbacks_list, workers=1, use_multiprocessing=False)] # the generator is not very thread safe
+                            callbacks=callbacks_list, workers=1, use_multiprocessing=True)] # the generator is not very thread safe
 
     return model, loss_history

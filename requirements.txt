@@ -3,8 +3,8 @@ imgaug
 matplotlib
 numpy
 pandas
-pvlib
 rasterio
 scikit-learn
 seaborn
 shapely
+pvlib
