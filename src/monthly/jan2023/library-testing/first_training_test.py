@@ -7,7 +7,15 @@ pan_images = []
 annotations = []
 boundaries = []
 
-data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
+
+computer = input('"wh1", "wsl", or "m2"')
+
+if computer == 'm2': 
+    data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
+
+elif computer == 'wh1': 
+    data_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/cnn-input/'
+
 for file in np.sort(os.listdir(data_dir)):
     full_path = data_dir+file
     if '.png' in file: 
