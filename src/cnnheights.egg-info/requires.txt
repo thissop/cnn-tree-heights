@@ -7,3 +7,4 @@ rasterio
 scikit-learn
 seaborn
 shapely
+pvlib

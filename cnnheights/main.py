@@ -81,7 +81,8 @@ def preprocess(area_files:list,
 def train_cnn(ndvi_images:list,
           pan_images:list, 
           annotations:list,
-          boundaries:list): 
+          boundaries:list, 
+         logging_dir:str=None): 
 
     r'''
     
@@ -102,12 +103,15 @@ def train_cnn(ndvi_images:list,
     annotations : list
         List of the full file paths to the extracted annotations outputed during the preproccessing step. 
     
+    logging_dir : str
+        Passed onto the load_train_test and train_model functions; see load_train_test_split docstring for explanation. 
+
     '''
         
     from cnnheights.utilities import load_train_test, train_model
     
-    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries)
+    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
 
-    model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator)
+    model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=logging_dir)
 
     return model, loss_history

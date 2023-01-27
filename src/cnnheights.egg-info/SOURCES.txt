@@ -20,9 +20,5 @@ src/cnnheights.egg-info/requires.txt
 src/cnnheights.egg-info/top_level.txt
 src/jesse/stage_1.py
 src/jesse/tree_heights/determine_tree_heights.py
-src/monthly/jan2023/compute-shadow-length/first-try.py
-src/monthly/jan2023/height-from-shadow-length/first-try.py
-src/monthly/jan2023/height-from-shadow-length/height-from-shadow.py
-src/monthly/jan2023/library-testing/first_preprocess_test.py
-src/monthly/jan2023/library-testing/first_training_test.py
-src/other/sort-requirements.py
+src/monthly/jan2023/height-from-zennith/first-zennith.py
+src/monthly/jan2023/height-from-zennith/height-from-shadow.py
