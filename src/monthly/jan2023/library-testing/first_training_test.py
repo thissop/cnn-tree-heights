@@ -7,7 +7,25 @@ pan_images = []
 annotations = [] 
 boundaries = []
 
-data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
+# [1] 435172
+# python /ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/src/monthly/jan2023/library-testing/first_training_test.py > /ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights/output/log.txt &
+
+computer = 'wh1' # input('m2, wh1, or wsl: ')
+
+if computer == 'm2': 
+    data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
+    logging_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/cnn-training-output'
+
+elif computer == 'wh1': 
+    data_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/cnn-input/'
+    logging_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights/output'
+
+elif computer == 'wsl': 
+    data_dir = ''
+
+else:
+    raise Exception('Choose correct computer to work on!')
+
 for file in np.sort(os.listdir(data_dir)):
     full_path = data_dir+file
     if '.png' in file: 
@@ -26,4 +44,5 @@ for file in np.sort(os.listdir(data_dir)):
 for i in [ndvi_images, pan_images, annotations, boundaries]: 
     print(len(i))
 
-train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir='/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/cnn-training-output')
+
+train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=logging_dir)

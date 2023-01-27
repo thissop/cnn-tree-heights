@@ -362,7 +362,7 @@ def load_train_test(ndvi_images:list,
     return train_generator, val_generator, test_generator
 
 def train_model(train_generator, val_generator, 
-                BATCH_SIZE = 8, NB_EPOCHS = 200, VALID_IMG_COUNT = 200, MAX_TRAIN_STEPS = 1000,
+                BATCH_SIZE = 8, NB_EPOCHS = 1, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 50, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
                 logging_dir:str=None, 
                 model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/'): 
@@ -445,11 +445,17 @@ def train_model(train_generator, val_generator,
 
     # last line: PROBLEMS START HERE!
 
+    import time 
+
+    s = time.time()
+
     loss_history = [model.fit(train_generator, 
                             steps_per_epoch=MAX_TRAIN_STEPS, 
                             epochs=NB_EPOCHS, 
                             validation_data=val_generator,
                             validation_steps=VALID_IMG_COUNT,
                             callbacks=callbacks_list, workers=1, use_multiprocessing=True)] # the generator is not very thread safe
+
+    print('time elapsed', time.time()-s, '(s)')
 
     return model, loss_history
