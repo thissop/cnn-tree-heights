@@ -4,10 +4,10 @@ import numpy as np
 
 ndvi_images = []
 pan_images = [] 
-annotations = []
+annotations = [] 
 boundaries = []
 
-data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
+data_dir = '/Users/yaroslav/Documents/Work/NASA/data/my current/cnn-input/'
 for file in np.sort(os.listdir(data_dir)):
     full_path = data_dir+file
     if '.png' in file: 
@@ -26,4 +26,4 @@ for file in np.sort(os.listdir(data_dir)):
 for i in [ndvi_images, pan_images, annotations, boundaries]: 
     print(len(i))
 
-train_cnn(ndvi_images, pan_images, annotations, boundaries)
+train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir='/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/cnn-training-output')

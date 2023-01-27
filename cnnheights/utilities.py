@@ -30,7 +30,7 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     zenith = 180-float(site.get_solarposition(time)['zenith']) # correct? 
 
     height = shadow/np.tan(np.radians(zenith)) # does this need to get corrected for time zone? 
-
+     # H = L tan (x), where x is solar elevation angle from ground? 
     return height
 
 ## PREPROCESS UTILITIES ## 
@@ -290,6 +290,7 @@ def load_train_test(ndvi_images:list,
                     pan_images:list, 
                     annotations:list,
                     boundaries:list,
+                    logging_dir:str=None,
                     normalize:float = 0.4, BATCH_SIZE = 8, patch_size=(256,256,4), 
                     input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3]):
     
@@ -312,6 +313,9 @@ def load_train_test(ndvi_images:list,
 
     boundaries : list
         List of boundary files extracted by previous preprocessing step 
+
+    logging_dir : str
+        the directory all the logging stuff should be saved into. defaults to none, which will make all the directories in directory that the python file that executes this function is run in. 
     
     '''
 
@@ -324,7 +328,11 @@ def load_train_test(ndvi_images:list,
     from cnnheights.original_core.frame_utilities import FrameInfo, split_dataset
     from cnnheights.original_core.dataset_generator import DataGenerator
 
-    patch_dir = './patches{}'.format(patch_size[0])
+    if logging_dir is not None: 
+        patch_dir = os.path.join(logging_dir, f'patches{patch_size[0]}/')
+    else: 
+        patch_dir = './patches{}'.format(patch_size[0])
+    
     frames_json = os.path.join(patch_dir,'frames_list.json')
 
     # Read all images/frames into memory
@@ -356,7 +364,8 @@ def load_train_test(ndvi_images:list,
 def train_model(train_generator, val_generator, 
                 BATCH_SIZE = 8, NB_EPOCHS = 200, VALID_IMG_COUNT = 200, MAX_TRAIN_STEPS = 1000,
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
-                model_path = './saved_models/UNet/'): 
+                logging_dir:str=None, 
+                model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/'): 
     from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity 
     from cnnheights.original_core.optimizers import adaDelta 
     import time 
@@ -380,9 +389,21 @@ def train_model(train_generator, val_generator,
     chf = input_image_channel + input_label_channel
     chs = reduce(lambda a,b: a+str(b), chf, '')
 
-    if not os.path.exists(model_path):
-        os.makedirs(model_path)
-    model_path = os.path.join(model_path,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
+    if logging_dir is not None: 
+        model_dir= os.path.join(logging_dir, 'saved_models/UNet/')
+        tensorboard_log_dir = os.path.join(logging_dir, 'logs/')
+
+    else: 
+        model_dir = './saved_models/UNet/'
+        tensorboard_log_dir = './logs'
+
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+    if not os.path.exists(tensorboard_log_dir): 
+        os.mkdir(tensorboard_log_dir)
+
+    model_path = os.path.join(model_dir,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
 
     # The weights without the model architecture can also be saved. Just saving the weights is more efficent.
 
@@ -413,12 +434,14 @@ def train_model(train_generator, val_generator,
 
     #early = EarlyStopping(monitor="val_loss", mode="min", verbose=2, patience=15)
 
-    log_dir = os.path.join('./logs','UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
-    tensorboard = TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
+
+
+    tensorboard_log_path = os.path.join(tensorboard_log_dir,'UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
+    tensorboard = TensorBoard(log_dir=tensorboard_log_path, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
 
     callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
 
-    # do training 
+    # do training  
 
     # last line: PROBLEMS START HERE!
 
