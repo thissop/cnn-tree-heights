@@ -1,3 +1,15 @@
+import matplotlib.pyplot as plt 
+import seaborn as sns
+
+plt.style.use('https://gist.githubusercontent.com/thissop/d1967ecb352011a4580e2b2274959a89/raw/fe22f835ecb734523e88884bd30c751ca6511cf2/stylish.mplstyle')
+
+sns.set_context("paper") # font_scale=
+sns.set_palette('deep') #
+seaborn_colors = sns.color_palette('deep') #
+
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams["mathtext.fontset"] = "dejavuserif"
+
 def plot_training_diagnostics(loss_history, save_path:str=None):
     r'''
     _Plot diagnostic plots from training process._
@@ -19,10 +31,9 @@ def plot_training_diagnostics(loss_history, save_path:str=None):
 
     '''
     import matplotlib.pyplot as plt 
+    import seaborn as sns
     import numpy as np
     import os
-
-    plt.style.use('https://gist.githubusercontent.com/thissop/d1967ecb352011a4580e2b2274959a89/raw/fe22f835ecb734523e88884bd30c751ca6511cf2/stylish.mplstyle')
 
     train_keys = ['loss', 'dice_coef', 'dice_loss', 'specificity', 'sensitivity', 'accuracy']
 
@@ -36,10 +47,11 @@ def plot_training_diagnostics(loss_history, save_path:str=None):
         val_key = f'val_{train_key}'
         ax.plot(x, loss_history[train_key], label=train_key)
         ax.plot(x, loss_history[val_key], label=val_key)
+        ax.legend(loc='best')
 
         ax.set(xlabel='Training Epoch', ylabel=train_key.title().replace('_', ' '))
 
-        plt.tight_layout()
+        #$plt.tight_layout()
 
         figures.append(fig)
         
