@@ -41,8 +41,9 @@ for file in np.sort(os.listdir(data_dir)):
         elif 'extracted_pan' in file: 
             pan_images.append(full_path) 
 
-for i in [ndvi_images, pan_images, annotations, boundaries]: 
-    print(len(i))
+model, hist = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=logging_dir)
+from cnnheights.plotting import plot_training_diagnostics
 
+figs = plot_training_diagnostics(loss_history=hist, save_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/src/monthly/jan2023/library-testing/training-diagnostic-plots/big-batch')
 
-train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=logging_dir)
+# [1] 452989
