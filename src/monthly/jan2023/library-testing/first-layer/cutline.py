@@ -20,4 +20,3 @@ def first_try():
         print(cutlines_gdf.iloc[i]['geometry'].contains(annotations_gdf.iloc[0]['geometry'])) # returns all false?
 
 
-

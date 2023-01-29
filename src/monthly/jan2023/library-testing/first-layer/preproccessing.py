@@ -21,7 +21,7 @@ for i in np.sort(os.listdir(top_dir)):
     elif 'vector' in i:
         backgrounds.append(path)
 
-    elif 'annotations' in i: 
+    elif 'annotation' in i: 
         annotations.append(path) 
 
 def file_only(fp): 

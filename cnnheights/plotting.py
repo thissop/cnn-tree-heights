@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt 
 import seaborn as sns
 
-plt.style.use('https://gist.githubusercontent.com/thissop/d1967ecb352011a4580e2b2274959a89/raw/fe22f835ecb734523e88884bd30c751ca6511cf2/stylish.mplstyle')
+#plt.style.use('https://gist.githubusercontent.com/thissop/d1967ecb352011a4580e2b2274959a89/raw/fe22f835ecb734523e88884bd30c751ca6511cf2/stylish.mplstyle')
 
 sns.set_context("paper") # font_scale=
 sns.set_palette('deep') #
