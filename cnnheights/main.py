@@ -73,7 +73,6 @@ def preprocess(area_files:list,
     # If a overlap if found, then extract + write the overlapping part of the raw image, create + write an image from training polygons and create + write an image from boundary weights in the that overlapping region.
         
     # Run the main function for extracting part of ndvi and pan images that overlap with training areas
-
     extract_overlapping(inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_path, ndviFilename='extracted_ndvi',
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
                                                 boundaryFilename='extracted_boundary', bands=bands)

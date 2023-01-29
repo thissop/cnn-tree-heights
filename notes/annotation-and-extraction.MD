@@ -6,10 +6,15 @@
 
 ## Preparing Workspace 
 - Open the big image file. Duplicate the layer. For reference, red is PAN, green is NDVI. 
+- Export the current view you want to work in to it's own GeoTIFF (ending will be .tif; export by current layer extent so you only get one layer in each). 
+- Close the big map, open the small one. 
 - Double click on original layer, go to symbology --> select singleband grey for render type
 - Change grey band to Band 2 (NDVI)
 - Perform similiar changes to copied layer, but set a min of 250 and max of 750 work well. Keep band to band 1 (default)
 - Return to symbology for first layer. Enable the Colorize box, choose the Lighten Blending mode.
+- export to ndvi and pan png images. do this by going to raster --> clip raster by extent (set bounds to calculate from the cutout tiff image layer)
+- from advanced paramters, set additional command line parameters `-b 1` for pan and `-b 2` for ndvi
+- save the coordinates of the center of the image for use in my intersection function later
 
 ## Annotations 
 - Make new geopackage layer (needs to be in its own folder). Needs to be a .gpkg file. 

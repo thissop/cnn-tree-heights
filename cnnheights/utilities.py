@@ -35,9 +35,44 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
 
 ## PREPROCESS UTILITIES ## 
 
+## HEIGHTS UTILITIES ##
+def get_cutline_data(lat:float, lon:float):
+    r'''
+    
+    return cutline information for an observation based on lat/long
+
+    TO DO
+    -----
+
+    - need to improve it so it can work when we use multiple cutouts 
+    - needs to get fixed to use the better lat/long format! 
+    - needs better docstring
+    - make the cutline path better?
+
+    '''
+    import geopandas as gpd
+    import pandas as pd
+
+    # 
+    cutlines_gdf = gpd.read_file('/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp')
+    cutlines_gdf = cutlines_gdf.set_crs('EPSG:32628', allow_override=True)
+    # 446623.30,1706523.96N 
+    df = pd.DataFrame({'Latitude': [lat], 'Longitude': [lon]}) # LOL. Lat is N/S, Long is W/E
+    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.Longitude, df.Latitude)).set_crs('EPSG:32628', allow_override=True)
+
+    polygons_contains = gpd.sjoin(cutlines_gdf, point_gdf, op='contains')
+    print(polygons_contains)
+
+    labels = ['ACQDATE', 'OFF_NADIR', 'SUN_ELEV', 'SUN_AZ', 'SAT_ELEV', 'SAT_AZ']
+    values = [polygons_contains[i].values[0] for i in labels]
+    
+    return dict(list(zip(labels, values)))
+
 def image_normalize(im, axis = (0,1), c = 1e-8):
     r'''Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
+
+## PREPROCESSING UTILITIES ##
 
 def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
     """
@@ -56,7 +91,6 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         os.makedirs(writePath)
     
     for i in range(len(inputImages)): 
-
         input_images = inputImages[i]
         areasWithPolygons=allAreasWithPolygons[i]
         writeCounter=i 
