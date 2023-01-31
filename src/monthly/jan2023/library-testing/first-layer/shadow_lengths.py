@@ -17,70 +17,33 @@ centroids = annotations_gdf.centroid
 
 d = 3
 dy = np.abs(d/np.tan(np.radians(info['SUN_AZ'])))
-lines = [LineString([(x-d, x+d), (y+dy, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
+lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
 lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
-
-lines_gdf = lines_gdf.head(1)
-annotations_gdf = annotations_gdf.head(1)
-
-print(gpd.sjoin(lines_gdf, annotations_gdf))
-
-fig, ax = plt.subplots()
-
-annotations_gdf.plot(ax=ax)
-
-print(annotations_gdf.crs, lines_gdf.crs)
-
-new_lines = []
-for i in range(len(lines_gdf.index)):
-    xy = lines_gdf['geometry'][i].xy
-    x = [xy[0][0], xy[1][0]]
-    y = [xy[0][1], xy[1][1]]
-    ax.plot(x, y, color='black', linewidth=0.1)
-    l = LineString([x, y])
-    new_lines.append(l)
-
-    s_poly = annotations_gdf['geometry'][i]
-
-    lring = LinearRing(list(s_poly.exterior.coords))
-
-    #print(l.intersection(annotations_gdf['geometry'].values[0]))
-    #ax.plot(l)
-
-new_lines_gdf = gpd.GeoDataFrame({'geometry':new_lines}, geometry='geometry', crs=annotations_gdf.crs)
-
-new_lines_gdf.plot(ax=ax)
-plt.show()
-
-quit()
-
-for i in range(len(annotations_gdf.index)): 
-    shadow_line = lines_gdf['geometry'][i]
-    print(shadow_line.length)
-    shadow_annotation = annotations_gdf['geometry'][i]
-    #print(intersection(shadow_line, shadow_annotation))
-    
-    inside = lines_gdf['geometry'][i].intersection(annotations_gdf.iloc[i]['geometry']).length
-    
-    
-    #print(lines_gdf.iloc[i]['geometry'])
-    #print(annotations_gdf.iloc[i]['geometry'])
-    #print(inside)
 
 fig, ax = plt.subplots()
 
 annotations_gdf.plot(ax=ax, color='#408ee0')
-
-for i in range(len(lines_gdf.index)):
-    xy = lines_gdf['geometry'][i].xy
-    x = [xy[0][0], xy[1][0]]
-    y = [xy[0][1], xy[1][1]]
-    ax.plot(x, y, color='black', linewidth=0.1)
-
+lines_gdf.plot(ax=ax, color='black', linewidth=0.1)
 centroids.plot(ax=ax, color='indianred', markersize=0.2, zorder=3)
 
+lengths = lines_gdf.intersection(annotations_gdf, align=False).length
+
+for i in range(len(lengths)): 
+    p = centroids[i]
+    ax.annotate(f'{round(lengths[i], 2)}', xy=(1.000001*p.x, 1.000001*p.y))
+
+print(lengths)
+
 # lines_gdf.plot(ax=ax, color='black')
+'''
+import matplotlib.image as mpimg
+
+img = mpimg.imread('/Users/yaroslav/Documents/Work/NASA/layers/first-working-input/ndvi_1.png')
+plt.imshow(img)
+plt.show()
 
 ax.set(xlabel='Longitude', ylabel='Latitude')
-
-plt.savefig('/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/first-layer/shadow_lengths_demo_approach.png', dpi=250)
+'''
+plt.savefig('/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/first-layer/shadow_lengths_demo_approach.png', dpi=450)
+plt.savefig('/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/first-layer/shadow_lengths_demo_approach.svg')
+plt.savefig('/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/first-layer/shadow_lengths_demo_approach.pdf')
