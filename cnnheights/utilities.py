@@ -1,12 +1,26 @@
-def height_from_shadow(shadow:float, time:str, lat:float, lon:float): 
+def height_from_shadow(shadow_length:float, zenith_angle:float):
     r'''
-    _Calculate height of tree from shadow length, time, and location_  
+    _get height from shadow length and zenith angle_
+
+
+    TO DO 
+    -----
+
+    - need to give user information about what way zenith angle should be oriented?
+    
+    '''
+    import numpy as np
+    
+    height = shadow_length/np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
+     # H = L tan (x), where x is solar elevation angle from ground? 
+    return height 
+
+def zenith_from_location(time:str, lat:float, lon:float): 
+    r'''
+    _get zenith angle for calculations based on time and location_  
 
     Parameters
     ----------      
-
-    shadow : `float`
-        Shadow length in meters
 
     time : `str`
         Time in `"yyyy-mm-dd hh:mm:ss"` format
@@ -18,8 +32,14 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     Returns
     -------
 
-    height : `float`
-        The tree's height in meters. 
+    zenith : `float`
+        Angle of sun's zenith.
+
+
+    TO DO 
+    -----
+    - make it get azimuth to!
+     
     '''
     
     
@@ -29,15 +49,112 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     site = Location(latitude=lat, longitude=lon)#, 'Etc/GMT+1') # latitude, longitude, time_zone, altitude, name
     zenith = 180-float(site.get_solarposition(time)['zenith']) # correct? 
 
-    height = shadow/np.tan(np.radians(zenith)) # does this need to get corrected for time zone? 
-     # H = L tan (x), where x is solar elevation angle from ground? 
-    return height
+    return zenith
+
+def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
+    r'''
+    _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
+
+    Arguments 
+    ---------
+
+    annotations_gpkg : `str`
+        path to annotations gpkg file 
+
+    NOTES 
+    -----
+
+    - get lat/long from center ish of the 
+
+    - uses lat/long to get container in cutlines file to reference to get azimuth angle from. 
+    - work with feather files (my preference) for saving these (e.g. save_path='./data.feather')...I love flexibility of .to_file(...)
+
+    TO DO 
+    -----
+    - fix lat long stuff?
+    - d is in meters because it's in the UTM projection? something to mention in paper how we update it for different regions (because inaccurate outside itself)
+
+    ''' 
+
+    import geopandas as gpd 
+    import numpy as np
+    from shapely.geometry import LineString, box
+
+    annotations_gdf = gpd.read_file(annotations_gpkg)
+
+    annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
+
+    centroids = annotations_gdf.centroid
+
+    cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
+
+    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
+    lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
+    lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
+
+    shadow_lines = lines_gdf.intersection(annotations_gdf, align=False)
+    shadow_lengths = shadow_lines.length
+
+    heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
+
+    bounds = annotations_gdf.bounds
+    dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
+    dy = np.abs(np.abs(bounds['maxy'])-np.abs(bounds['miny']))
+    dxy = np.max(np.array([dx,dy]).T, axis=1)
+    square_bounds = np.array([[minx, miny, minx+diff, miny+diff] for minx, miny, diff in zip(bounds['minx'], bounds['miny'], dxy)])    
+
+    d = {'shadow_geometry':annotations_gdf['geometry'], 
+         'centroids':centroids,
+         'bounds_geometry':[box(*i) for i in square_bounds],
+         'heights':heights, 
+         'line_geometries':shadow_lines, 
+         'lengths':shadow_lengths}
+    
+    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}')
+
+    if save_path is not None: 
+        shadows_gdf.to_file(save_path)
+
+    return shadows_gdf
 
 ## PREPROCESS UTILITIES ## 
+
+## HEIGHTS UTILITIES ##
+def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
+    r'''
+    
+    return cutline information for an observation based on lat/long
+
+    TO DO
+    -----
+
+    - need to improve it so it can work when we use multiple cutouts 
+    - needs to get fixed to use the better lat/long format! 
+    - needs better docstring
+    - make the cutline path better?
+
+    '''
+    import geopandas as gpd
+    import pandas as pd
+
+    # 
+    cutlines_gdf = gpd.read_file(cutlines_shp)
+    cutlines_gdf = cutlines_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
+    df = pd.DataFrame({'North': [north], 'East': [east]}) # LOL. Lat is N/S, Long is W/E
+    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.East, df.North)).set_crs(f'EPSG:{epsg}', allow_override=True)
+
+    polygons_contains = gpd.sjoin(cutlines_gdf, point_gdf, op='contains')
+
+    labels = ['ACQDATE', 'OFF_NADIR', 'SUN_ELEV', 'SUN_AZ', 'SAT_ELEV', 'SAT_AZ']
+    values = [polygons_contains[i].values[0] for i in labels]
+    
+    return dict(list(zip(labels, values)))
 
 def image_normalize(im, axis = (0,1), c = 1e-8):
     r'''Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
+
+## PREPROCESSING UTILITIES ##
 
 def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
     """
@@ -56,7 +173,6 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         os.makedirs(writePath)
     
     for i in range(len(inputImages)): 
-
         input_images = inputImages[i]
         areasWithPolygons=allAreasWithPolygons[i]
         writeCounter=i 
@@ -362,7 +478,7 @@ def load_train_test(ndvi_images:list,
     return train_generator, val_generator, test_generator
 
 def train_model(train_generator, val_generator, 
-                BATCH_SIZE = 8, NB_EPOCHS = 1, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 50, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000
+                BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
                 logging_dir:str=None, 
                 model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/'): 
@@ -458,4 +574,4 @@ def train_model(train_generator, val_generator,
 
     print('time elapsed', time.time()-s, '(s)')
 
-    return model, loss_history
+    return model, loss_history[0].history
