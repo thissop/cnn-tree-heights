@@ -12,7 +12,7 @@ plt.rcParams["mathtext.fontset"] = "dejavuserif"
 
 # Preprocessing Related
 
-def plot_shadow_lengths(shadow_lengths_file:str):
+def plot_shadow_lengths(shadows_gdf, background_tif:str=None, show_lines:bool=True, save_path:str=None, dpi:int=350):
     r'''
     
     Notes 
@@ -23,18 +23,58 @@ def plot_shadow_lengths(shadow_lengths_file:str):
 
     - give option for 
     
+
+    {'shadow_geometry':annotations_gdf['geometry'], 
+         'centroids':centroids,
+         'bounds_geometry':[box(*i) for i in square_bounds],
+         'heights':heights, 
+         'line_geometries':shadow_lines, 
+         'lengths':shadow_lengths}
+
     ''' 
+
+    import rasterio 
+    import rasterio.plot 
 
     fig, ax = plt.subplots()
 
-def plot_annotations_gallery(shadows_gdf, background_tif:str, save_path:str=None): 
+    if background_tif is not None: 
+        raster = rasterio.open(background_tif)
+        rasterio.plot.show(raster, ax=ax, cmap='Greys_r') # change raster dim based on 
+
+    shadows_gdf['shadow_geometry'].plot(ax=ax, color='#408ee0')
+    #lines_gdf.plot(ax=ax, color='black', linewidth=0.1)
+    #centroids.plot(ax=ax, color='indianred', markersize=0.2, zorder=3)
+
+    length_lines = shadows_gdf['line_geometries']
+    lengths = shadows_gdf['lengths']
+    heights = shadows_gdf['heights']
+    centroids = shadows_gdf['centroids']
+    for i in range(len(centroids)): 
+        p = centroids[i]
+        ax.annotate(f'l={round(lengths[i], 1)}\nh={round(heights[i],1)}', xy=(1.000001*p.x, 1.000001*p.y), size='x-small')
+
+    if show_lines: 
+        shadows_gdf['line_geometries'].plot(ax=ax, color='black')
+
+    ax.set(xlabel='E', ylabel='N')
+
+    if save_path is not None: 
+        if save_path.split('.')[0] == 'png': 
+            plt.savefig(save_path, dpi=dpi)
+        else: 
+            plt.savefig(save_path)
+    else: 
+        plt.show()
+
+def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:float=0.5, save_path:str=None): 
     r'''
     _Plot one or multiple annotations with shadows_
     
     TO DO 
     -----
-    - Need to standardize shadows gdf
-
+    - need to make this more efficient? right now it's replotting the raster for every single axis, and then just clipping the axis' bounsds.
+    - need to fix the indicing (show it shows 1 as single, 2 as one row, and doesn't plot past order)
     '''
 
     import numpy as np
@@ -49,21 +89,25 @@ def plot_annotations_gallery(shadows_gdf, background_tif:str, save_path:str=None
     raster = rasterio.open(background_tif)
 
     epsg = shadows_gdf.crs.to_epsg()
-
+    length = len(shadows_gdf.index)
     fig, axs = plt.subplots(dim, dim, figsize=(6,6))
-
     for i in range(dim): 
         for j in range(dim): 
-            ax = axs[i,j]
+            ax = axs[i,j] 
+            #ax.set_axis_off()
+            ax.set(xticks=[], yticks=[])
 
-            row = shadows_gdf.iloc[i+j]
-            bbox = row['bounds_geometry'].bounds
+            if (length<4 and (i+j)<(length-i)) or (length>=4 and (i+j)<(length-(2*i))): 
+                ax = axs[i,j]
+                row = shadows_gdf.iloc[i+j]
+                bbox = row['bounds_geometry'].bounds
 
-            #inset_background, _ = mask(dataset=raster, shapes=[row['bounds_geometry']], crop=True, filled=False)
-            rasterio.plot.show(raster, ax=ax, cmap='Greys_r') # change raster dim based on 
-            gpd.GeoSeries(row['shadow_geometry']).plot(ax=ax, alpha=0.5)
-            ax.set(xlim=(0.999998*bbox[0], 1.000002*bbox[2]), ylim=(0.9999985*bbox[1], 1.0000015*bbox[3]))
-            ax.set_axis_off()
+                #inset_background, _ = mask(dataset=raster, shapes=[row['bounds_geometry']], crop=True, filled=False)
+                rasterio.plot.show(raster, ax=ax, cmap='Greys_r') # change raster dim based on 
+                gpd.GeoSeries(row['shadow_geometry']).plot(ax=ax, alpha=polygon_alpha)
+                ax.set(xlim=(0.9999999*bbox[0], 1.0000001*bbox[2]), ylim=(0.9999999*bbox[1], 1.0000001*bbox[3]))
+                ax.set_aspect('equal')
+                
 
     plt.tight_layout()
 
