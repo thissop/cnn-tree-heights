@@ -39,8 +39,7 @@ print(dxy)
 
 square_bounds = np.array([[minx, miny, minx+diff, miny+diff] for minx, miny, diff in zip(bounds['minx'], bounds['miny'], dxy)])
 
-
-d = {'geometry':[box(*i) for i in square_bounds]}
+d = {'bounds_geometry':[box(*i) for i in square_bounds]}
 bounds_gdf = gpd.GeoDataFrame(d, crs='epsg:32628')
 
 bounds_gdf.plot(ax=ax, color="None", edgecolor='red')

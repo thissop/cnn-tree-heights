@@ -51,7 +51,7 @@ def zenith_from_location(time:str, lat:float, lon:float):
 
     return zenith
 
-def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
+def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
     r'''
     _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
 
@@ -78,7 +78,7 @@ def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, north:fl
 
     import geopandas as gpd 
     import numpy as np
-    from shapely.geometry import LineString
+    from shapely.geometry import LineString, box
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
 
@@ -92,17 +92,30 @@ def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, north:fl
     lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
     lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
 
-    lengths = lines_gdf.intersection(annotations_gdf, align=False).length
+    shadow_lines = lines_gdf.intersection(annotations_gdf, align=False)
+    shadow_lengths = shadow_lines.length
 
-    heights = height_from_shadow(lengths, zenith_angle=cutline_info['SUN_ELEV'])
+    heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
 
-    d = {'geometry':annotations_gdf['geometry'], 'heights':heights, 'lengths':lengths, 'centroids':centroids}
-    output_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}')
+    bounds = annotations_gdf.bounds
+    dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
+    dy = np.abs(np.abs(bounds['maxy'])-np.abs(bounds['miny']))
+    dxy = np.max(np.array([dx,dy]).T, axis=1)
+    square_bounds = np.array([[minx, miny, minx+diff, miny+diff] for minx, miny, diff in zip(bounds['minx'], bounds['miny'], dxy)])    
+
+    d = {'shadow_geometry':annotations_gdf['geometry'], 
+         'centroids':centroids,
+         'bounds_geometry':[box(*i) for i in square_bounds],
+         'heights':heights, 
+         'line_geometries':shadow_lines, 
+         'lengths':shadow_lengths}
+    
+    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}')
 
     if save_path is not None: 
-        output_gdf.to_file(save_path)
+        shadows_gdf.to_file(save_path)
 
-    return output_gdf
+    return shadows_gdf
 
 ## PREPROCESS UTILITIES ## 
 
@@ -128,10 +141,9 @@ def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users
     cutlines_gdf = gpd.read_file(cutlines_shp)
     cutlines_gdf = cutlines_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
     df = pd.DataFrame({'North': [north], 'East': [east]}) # LOL. Lat is N/S, Long is W/E
-    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.North, df.East)).set_crs(f'EPSG:{epsg}', allow_override=True)
+    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.East, df.North)).set_crs(f'EPSG:{epsg}', allow_override=True)
 
     polygons_contains = gpd.sjoin(cutlines_gdf, point_gdf, op='contains')
-    print(polygons_contains)
 
     labels = ['ACQDATE', 'OFF_NADIR', 'SUN_ELEV', 'SUN_AZ', 'SAT_ELEV', 'SAT_AZ']
     values = [polygons_contains[i].values[0] for i in labels]

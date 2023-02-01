@@ -27,6 +27,52 @@ def plot_shadow_lengths(shadow_lengths_file:str):
 
     fig, ax = plt.subplots()
 
+def plot_annotations_gallery(shadows_gdf, background_tif:str, save_path:str=None): 
+    r'''
+    _Plot one or multiple annotations with shadows_
+    
+    TO DO 
+    -----
+    - Need to standardize shadows gdf
+
+    '''
+
+    import numpy as np
+    import rasterio 
+    from rasterio.mask import mask 
+    from fiona.crs import from_epsg
+    import geopandas as gpd 
+    import rasterio.plot
+
+    dim = int(np.trunc(np.sqrt(len(shadows_gdf.index)))+1)
+
+    raster = rasterio.open(background_tif)
+
+    epsg = shadows_gdf.crs.to_epsg()
+
+    fig, axs = plt.subplots(dim, dim, figsize=(6,6))
+
+    for i in range(dim): 
+        for j in range(dim): 
+            ax = axs[i,j]
+
+            row = shadows_gdf.iloc[i+j]
+            bbox = row['bounds_geometry'].bounds
+
+            #inset_background, _ = mask(dataset=raster, shapes=[row['bounds_geometry']], crop=True, filled=False)
+            rasterio.plot.show(raster, ax=ax, cmap='Greys_r') # change raster dim based on 
+            gpd.GeoSeries(row['shadow_geometry']).plot(ax=ax, alpha=0.5)
+            ax.set(xlim=(0.999998*bbox[0], 1.000002*bbox[2]), ylim=(0.9999985*bbox[1], 1.0000015*bbox[3]))
+            ax.set_axis_off()
+
+    plt.tight_layout()
+
+    if save_path is not None: 
+       plt.savefig(save_path) 
+    
+    else: 
+        plt.show()
+
 # ML Related
 
 def plot_training_diagnostics(loss_history, save_path:str=None):
