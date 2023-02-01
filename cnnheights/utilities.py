@@ -11,7 +11,7 @@ def height_from_shadow(shadow_length:float, zenith_angle:float):
     '''
     import numpy as np
     
-    height = shadow_length/np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
+    height = shadow_length*np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
      # H = L tan (x), where x is solar elevation angle from ground? 
     return height 
 
@@ -96,6 +96,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     shadow_lengths = shadow_lines.length
 
     heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
+    print(cutline_info['SUN_ELEV'])
 
     bounds = annotations_gdf.bounds
     dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
