@@ -10,14 +10,16 @@ from cnnheights.utilities import height_from_shadow
 
 # THIS IS TAKING HOURS TO GET INTERSECTION OF THESE GENERATED LINES WITH THE POLYs LOL
 
-info = get_cutline_data(lat=15.4351209, lon=-15.4973903)
-#15.4351209,-15.4973903
+info = get_cutline_data(lat=15.4350365, lon=-15.4973063)
+
+# 15.4350365,-15.4973063
+
 annotations_gdf = gpd.read_file('/Users/yaroslav/Documents/Work/NASA/layers/first-working-input/annotations_1.gpkg')
-annotations_gdf.set_crs('epsg:4326', allow_override=True)
+annotations_gdf = annotations_gdf.set_crs('epsg:4326', allow_override=True)
 
 centroids = annotations_gdf.centroid
 
-d = 3
+d = 0.0001
 dy = np.abs(d/np.tan(np.radians(info['SUN_AZ'])))
 lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
 lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)

@@ -1,12 +1,26 @@
-def height_from_shadow(shadow:float, time:str, lat:float, lon:float): 
+def height_from_shadow(shadow_length:float, zenith_angle:float):
     r'''
-    _Calculate height of tree from shadow length, time, and location_  
+    _get height from shadow length and zenith angle_
+
+
+    TO DO 
+    -----
+
+    - need to give user information about what way zenith angle should be oriented?
+    
+    '''
+    import numpy as np
+    
+    height = shadow_length/np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
+     # H = L tan (x), where x is solar elevation angle from ground? 
+    return height 
+
+def zenith_from_location(time:str, lat:float, lon:float): 
+    r'''
+    _get zenith angle for calculations based on time and location_  
 
     Parameters
     ----------      
-
-    shadow : `float`
-        Shadow length in meters
 
     time : `str`
         Time in `"yyyy-mm-dd hh:mm:ss"` format
@@ -18,8 +32,14 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     Returns
     -------
 
-    height : `float`
-        The tree's height in meters. 
+    zenith : `float`
+        Angle of sun's zenith.
+
+
+    TO DO 
+    -----
+    - make it get azimuth to!
+     
     '''
     
     
@@ -29,14 +49,64 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     site = Location(latitude=lat, longitude=lon)#, 'Etc/GMT+1') # latitude, longitude, time_zone, altitude, name
     zenith = 180-float(site.get_solarposition(time)['zenith']) # correct? 
 
-    height = shadow/np.tan(np.radians(zenith)) # does this need to get corrected for time zone? 
-     # H = L tan (x), where x is solar elevation angle from ground? 
-    return height
+    return zenith
+
+def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, lat:float, lon:float, save_path:str=None, d:float=0.001):
+    r'''
+    _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
+
+    Arguments 
+    ---------
+
+    annotations_gpkg : `str`
+        path to annotations gpkg file 
+
+    NOTES 
+    -----
+
+    - get lat/long from center ish of the 
+
+    - uses lat/long to get container in cutlines file to reference to get azimuth angle from. 
+    - work with feather files (my preference) for saving these (e.g. save_path='./data.feather')...I love flexibility of .to_file(...)
+
+    TO DO 
+    -----
+    - fix lat long stuff 
+
+    ''' 
+
+    import geopandas as gpd 
+    import numpy as np
+    from shapely.geometry import LineString
+
+    annotations_gdf = gpd.read_file(annotations_gpkg)
+
+    annotations_gdf = annotations_gdf.set_crs('EPSG:4326', allow_override=True)
+
+    centroids = annotations_gdf.centroid
+
+    cutline_info = get_cutline_data(lat=lat, lon=lon, cutlines_shp=cutlines_shp)
+
+    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
+    lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
+    lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
+
+    lengths = lines_gdf.intersection(annotations_gdf, align=False).length
+
+    heights = height_from_shadow(lengths, zenith_angle=cutline_info['SUN_ELEV'])
+
+    d = {'geometry':annotations_gdf['geometry'], 'heights':heights, 'lengths':lengths, 'centroids':centroids}
+    output_gdf = gpd.GeoDataFrame(d, crs='EPSG:4326')
+
+    if save_path is not None: 
+        output_gdf.to_file(save_path)
+
+    return output_gdf
 
 ## PREPROCESS UTILITIES ## 
 
 ## HEIGHTS UTILITIES ##
-def get_cutline_data(lat:float, lon:float):
+def get_cutline_data(lat:float, lon:float, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
     r'''
     
     return cutline information for an observation based on lat/long
@@ -54,11 +124,10 @@ def get_cutline_data(lat:float, lon:float):
     import pandas as pd
 
     # 
-    cutlines_gdf = gpd.read_file('/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp')
-    cutlines_gdf = cutlines_gdf.set_crs('EPSG:32628', allow_override=True)
-    # 446623.30,1706523.96N 
+    cutlines_gdf = gpd.read_file(cutlines_shp)
+    cutlines_gdf = cutlines_gdf.set_crs('EPSG:4326', allow_override=True)
     df = pd.DataFrame({'Latitude': [lat], 'Longitude': [lon]}) # LOL. Lat is N/S, Long is W/E
-    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.Longitude, df.Latitude)).set_crs('EPSG:32628', allow_override=True)
+    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.Longitude, df.Latitude)).set_crs('EPSG:4326', allow_override=True)
 
     polygons_contains = gpd.sjoin(cutlines_gdf, point_gdf, op='contains')
     print(polygons_contains)

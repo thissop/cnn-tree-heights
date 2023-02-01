@@ -10,6 +10,25 @@ seaborn_colors = sns.color_palette('deep') #
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams["mathtext.fontset"] = "dejavuserif"
 
+# Preprocessing Related
+
+def plot_shadow_lengths(shadow_lengths_file:str):
+    r'''
+    
+    Notes 
+    -----
+
+    TO DO 
+    -----
+
+    - give option for 
+    
+    ''' 
+
+    fig, ax = plt.subplots()
+
+# ML Related
+
 def plot_training_diagnostics(loss_history, save_path:str=None):
     r'''
     _Plot diagnostic plots from training process._
@@ -62,4 +81,4 @@ def plot_training_diagnostics(loss_history, save_path:str=None):
     
     return figures
 
-        
+       
