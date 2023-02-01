@@ -4,5 +4,5 @@ annotations_gpkg = '/Users/yaroslav/Documents/Work/NASA/layers/first-working-inp
 
 annotations_gdf = gpd.read_file(annotations_gpkg)
 
-annotations_gdf = annotations_gdf.set_crs('epsg:4326', allow_override=True)
+annotations_gdf = annotations_gdf.set_crs('epsg:32637', allow_override=True)
 print(list(annotations_gdf))

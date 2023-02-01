@@ -51,7 +51,7 @@ def zenith_from_location(time:str, lat:float, lon:float):
 
     return zenith
 
-def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, lat:float, lon:float, save_path:str=None, d:float=0.001):
+def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
     r'''
     _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
 
@@ -71,7 +71,8 @@ def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, lat:floa
 
     TO DO 
     -----
-    - fix lat long stuff 
+    - fix lat long stuff?
+    - d is in meters because it's in the UTM projection? something to mention in paper how we update it for different regions (because inaccurate outside itself)
 
     ''' 
 
@@ -81,11 +82,11 @@ def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, lat:floa
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
 
-    annotations_gdf = annotations_gdf.set_crs('EPSG:4326', allow_override=True)
+    annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
 
     centroids = annotations_gdf.centroid
 
-    cutline_info = get_cutline_data(lat=lat, lon=lon, cutlines_shp=cutlines_shp)
+    cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
 
     dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
     lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
@@ -96,7 +97,7 @@ def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, lat:floa
     heights = height_from_shadow(lengths, zenith_angle=cutline_info['SUN_ELEV'])
 
     d = {'geometry':annotations_gdf['geometry'], 'heights':heights, 'lengths':lengths, 'centroids':centroids}
-    output_gdf = gpd.GeoDataFrame(d, crs='EPSG:4326')
+    output_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}')
 
     if save_path is not None: 
         output_gdf.to_file(save_path)
@@ -106,7 +107,7 @@ def shadow_heights_from_annotations(annotations_gpkg, cutlines_shp:str, lat:floa
 ## PREPROCESS UTILITIES ## 
 
 ## HEIGHTS UTILITIES ##
-def get_cutline_data(lat:float, lon:float, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
+def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
     r'''
     
     return cutline information for an observation based on lat/long
@@ -125,9 +126,9 @@ def get_cutline_data(lat:float, lon:float, cutlines_shp:str='/Users/yaroslav/Doc
 
     # 
     cutlines_gdf = gpd.read_file(cutlines_shp)
-    cutlines_gdf = cutlines_gdf.set_crs('EPSG:4326', allow_override=True)
-    df = pd.DataFrame({'Latitude': [lat], 'Longitude': [lon]}) # LOL. Lat is N/S, Long is W/E
-    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.Longitude, df.Latitude)).set_crs('EPSG:4326', allow_override=True)
+    cutlines_gdf = cutlines_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
+    df = pd.DataFrame({'North': [north], 'East': [east]}) # LOL. Lat is N/S, Long is W/E
+    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.North, df.East)).set_crs(f'EPSG:{epsg}', allow_override=True)
 
     polygons_contains = gpd.sjoin(cutlines_gdf, point_gdf, op='contains')
     print(polygons_contains)

@@ -15,7 +15,7 @@ info = get_cutline_data(lat=15.4350365, lon=-15.4973063)
 # 15.4350365,-15.4973063
 
 annotations_gdf = gpd.read_file('/Users/yaroslav/Documents/Work/NASA/layers/first-working-input/annotations_1.gpkg')
-annotations_gdf = annotations_gdf.set_crs('epsg:4326', allow_override=True)
+#annotations_gdf = annotations_gdf.set_crs('epsg:32637', allow_override=True)
 
 centroids = annotations_gdf.centroid
 

@@ -13,7 +13,7 @@ from cnnheights.utilities import height_from_shadow
 info = get_cutline_data(lat=15.4351209, lon=-15.4973903)
 #15.4351209,-15.4973903
 annotations_gdf = gpd.read_file('/Users/yaroslav/Documents/Work/NASA/layers/first-working-input/annotations_1.gpkg')
-annotations_gdf.set_crs('epsg:4326', allow_override=True)
+annotations_gdf.set_crs('epsg:32637', allow_override=True)
 
 centroids = annotations_gdf.centroid
 
