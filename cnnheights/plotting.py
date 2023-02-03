@@ -10,9 +10,23 @@ seaborn_colors = sns.color_palette('deep') #
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams["mathtext.fontset"] = "dejavuserif"
 
+dpi = 350
+
+def save_fig(save_path, dpi:float=350):
+    if save_path is not None: 
+        if save_path.split('.')[0] == 'png': 
+            plt.savefig(save_path, dpi=dpi)
+        else: 
+            plt.savefig(save_path)
+
+        plt.close()
+
+    else: 
+        plt.show()
+
 # Preprocessing Related
 
-def plot_shadow_lengths(shadows_gdf, background_tif:str=None, show_lines:bool=True, save_path:str=None, dpi:int=350):
+def plot_shadow_lengths(shadows_gdf, background_tif:str=None, show_lines:bool=True, save_path:str=None, dpi:int=dpi):
     r'''
     
     Notes 
@@ -59,15 +73,9 @@ def plot_shadow_lengths(shadows_gdf, background_tif:str=None, show_lines:bool=Tr
 
     ax.set(xlabel='E', ylabel='N')
 
-    if save_path is not None: 
-        if save_path.split('.')[0] == 'png': 
-            plt.savefig(save_path, dpi=dpi)
-        else: 
-            plt.savefig(save_path)
-    else: 
-        plt.show()
+    save_fig(save_path, dpi)
 
-def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:float=0.5, save_path:str=None): 
+def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:float=0.5, save_path:str=None, dpi=dpi): 
     r'''
     _Plot one or multiple annotations with shadows_
     
@@ -111,11 +119,21 @@ def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:floa
 
     plt.tight_layout()
 
-    if save_path is not None: 
-       plt.savefig(save_path) 
-    
-    else: 
-        plt.show()
+    save_fig(save_path, dpi)
+
+# Post Processing Related
+
+def plot_heights_distribution(shadows_gdf, save_path:str=None, dpi:int=dpi): 
+    import geopandas as gpd 
+
+    fig, ax = plt.subplots()
+
+    ax.hist(shadows_gdf['heights'])
+    ax.set(xlabel='Tree Height (m)', ylabel='Frequency')
+
+    plt.tight_layout()
+
+    save_fig(save_path, dpi)
 
 # ML Related
 
@@ -166,8 +184,7 @@ def plot_training_diagnostics(loss_history, save_path:str=None):
         
         if save_path is not None: 
             plt.savefig(os.path.join(save_path, f'{train_key}.png'), dpi=200)
-
-        plt.clf()
+            plt.close()
     
     return figures
 
