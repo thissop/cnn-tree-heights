@@ -290,6 +290,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
 
         d = {'geometry':res}
         gdf = gpd.GeoDataFrame(d, crs=crs)
+        gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
         gdf.to_file(predicted_fp, driver='ESRI Shapefile')#, schema=schema)
 
         '''

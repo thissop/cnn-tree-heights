@@ -81,10 +81,14 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     from shapely.geometry import LineString, box
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
+    annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
 
     annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
-
-    centroids = annotations_gdf.centroid
+    print(annotations_gdf.index)
+    annotations_gdf.set_index = list(range(len(annotations_gdf.index)))
+    print(annotations_gdf)
+    quit()
+    centroids = annotations_gdf.centroid    
 
     cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
 
