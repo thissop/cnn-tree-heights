@@ -1,5 +1,6 @@
+#NB_EPOCHS, MAX_TRAIN_STEPS
 import os
-from cnnheights import train_cnn
+from cnnheights import train_cnn, predict
 import numpy as np
 
 ndvi_images = []
@@ -41,15 +42,10 @@ for file in np.sort(os.listdir(data_dir)):
         elif 'extracted_pan' in file: 
             pan_images.append(full_path) 
 
-model, hist = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=logging_dir)
+model, hist = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=logging_dir, epochs=1, training_steps=5)
 
-modelpredtictions = model.predict(tpx, batch_size=8)
+mask = predict(model, ndvi_images[0], pan_images[0])
 
-from cnnheights.plotting import plot_training_diagnostics
+print(mask)
 
-figs = plot_training_diagnostics(loss_history=hist, save_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/src/monthly/jan2023/library-testing/training-diagnostic-plots/big-batch')
-
-# [1] 452989
-
-
-
+# [1] 
