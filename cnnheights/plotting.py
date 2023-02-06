@@ -82,7 +82,6 @@ def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:floa
     TO DO 
     -----
     - need to make this more efficient? right now it's replotting the raster for every single axis, and then just clipping the axis' bounsds.
-    - need to fix the indicing (show it shows 1 as single, 2 as one row, and doesn't plot past order)
     '''
 
     import numpy as np

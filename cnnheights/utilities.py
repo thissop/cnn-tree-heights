@@ -84,10 +84,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
 
     annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
-    print(annotations_gdf.index)
-    annotations_gdf.set_index = list(range(len(annotations_gdf.index)))
-    print(annotations_gdf)
-    quit()
+   
     centroids = annotations_gdf.centroid    
 
     cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
@@ -132,7 +129,6 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
 
     Notes
     -----
-    - output_path is used for output_tif and output vector rectangle.
     - note for jesse: opening from this window saves crazy memory. 
 
     '''
@@ -205,8 +201,10 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
         # load img here using rasterio
         fig, ax = plt.subplots(figsize=(5,5))
 
-        plot.show(img[0], origin='upper', transform=window_transform, extent=extent, interpolation=None, ax=ax, vmin=250, vmax=750, cmap='Greys_r')
-        plot.show(img[1], origin='upper', transform=window_transform, extent=extent, interpolation=None, cmap='Reds', ax=ax, alpha=0.5)
+        plot.show(img[0], origin='upper', transform=window_transform, 
+                  extent=extent, interpolation=None, ax=ax, vmin=250, vmax=750, cmap='Greys_r')
+        plot.show(img[1], origin='upper', transform=window_transform, 
+                  extent=extent, interpolation=None, cmap='Reds', ax=ax, alpha=0.5)
         
         #blended = lighten_only(np.array([img[0].astype(float)]), np.array([img[1].astype(float)]), opacity=0.5)
         #ax.plot(blended)
