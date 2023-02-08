@@ -22,9 +22,9 @@ plt.savefig('/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/feb20
 
 from cnnheights.utilities import shadows_from_annotations
 
-
 cutlines_shp = '/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'
 background_tif = '/Users/yaroslav/Documents/Work/NASA/layers/first-working-input/cutout_1.tif'
+big_tif = '/Users/yaroslav/Documents/Work/NASA/data/jesse/big mosaic/big mosaic.tif'
 
 save_path = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/feb2023/saving-predictions/shadows_gdf.feather'
 
@@ -32,4 +32,7 @@ shadows_gdf = shadows_from_annotations(annotations_gpkg=predictions_file,
                                        cutlines_shp=cutlines_shp, 
                                        north=1707319.01, east=450252.85, epsg='32628', save_path=save_path) # 450252.85,1707319.01
 
-print(shadows_gdf)
+from cnnheights.plotting import plot_shadow_lengths
+plot_path = 'src/monthly/feb2023/saving-predictions/predicted heights from predictions.png'
+plot_shadow_lengths(shadows_gdf.iloc[0:10], background_tif=big_tif, save_path=plot_path)
+

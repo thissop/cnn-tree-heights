@@ -95,7 +95,6 @@ def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:floa
 
     raster = rasterio.open(background_tif)
 
-    epsg = shadows_gdf.crs.to_epsg()
     length = len(shadows_gdf.index)
     fig, axs = plt.subplots(dim, dim, figsize=(6,6))
     for i in range(dim): 

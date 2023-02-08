@@ -288,9 +288,9 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
 
         res = mask_to_polygons(detected_mask, detected_meta['transform'])
 
-        d = {'geometry':res}
+        d = {'geometry':[i for i in res if i.type == 'Polygon']}
         gdf = gpd.GeoDataFrame(d, crs=crs)
-        gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
+        #gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
         gdf.to_file(predicted_fp, driver='ESRI Shapefile')#, schema=schema)
 
         '''

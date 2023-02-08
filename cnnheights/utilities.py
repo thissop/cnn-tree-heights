@@ -112,10 +112,13 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
          'line_geometries':shadow_lines, 
          'lengths':shadow_lengths}
     
-    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}')
+    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
+    shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
+
+    print(shadows_gdf)
 
     if save_path is not None: 
-        shadows_gdf.to_file(save_path)
+        shadows_gdf.to_file(save_path, index=False)
 
     return shadows_gdf
 
