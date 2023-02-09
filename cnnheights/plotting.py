@@ -119,6 +119,93 @@ def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:floa
 
     save_fig(save_path, dpi)
 
+def plot_annotation_diagnostics(shadows_gdf, save_path:str=None):
+    r'''
+    
+    Notes
+    ----- 
+    This function makes 1. a histogram plot of stuff like area/height vs height, 2. a pairplot of all important features from shadows (perimeter, area, etc.), and a couple PCA 2d clustered plots
+    
+    '''
+    
+    import geopandas as gpd
+    import pandas as pd  
+    import numpy as np
+    from sklearn.cluster import DBSCAN
+    from sklearn.decomposition import PCA
+
+    if type(shadows_gdf) is str: 
+        gdf = gpd.read_file(shadows_gdf)
+    else: 
+        gdf = shadows_gdf 
+
+    '''
+    'heights':heights, 
+    'lengths':shadow_lengths, 
+    'areas':annotations_gdf['geometry'].area, 
+    'perimeters':annotations_gdf['geometry'].length,
+    'diameters':
+    '''
+
+    relevant_cols = ['heights', 'diameters', 'lengths', 'heights', 'perimeters', 'areas']
+
+    fig, axs = plt.subplots(2, 2, figsize=(6,6))
+
+    ax = axs[0, 0]
+    ax.hist(gdf['diameters']/gdf['heights'])
+    ax.set(xlabel='diameter/height', ylabel='Frequency')
+
+    ax = axs[0, 1]
+    ax.hist(gdf['perimeters']/gdf['heights'])
+    ax.set(xlabel='perimeter/height', ylabel='Frequency')
+
+    ax = axs[1,0]
+    ax.hist(gdf['areas']/gdf['heights'])
+    ax.set(xlabel='area/height', ylabel='Frequency')
+
+    axs[1,1].axis('off')
+
+    plt.tight_layout()
+
+    save_fig(save_path.replace('.','[histograms].'), dpi)
+
+    pairplot_df = pd.DataFrame()
+    for i in relevant_cols: 
+        pairplot_df[i] = gdf[i].to_numpy()
+
+    fig, ax = plt.subplots()
+
+    sns.pairplot(pairplot_df)
+
+    save_fig(save_path.replace('.','[pairplot].'))
+
+    # CLUSTERING
+
+    # DBSCAN
+
+    fig, ax = plt.subplots(figsize=(4,4))
+    db = DBSCAN().fit(pairplot_df)
+    labels = db.labels_
+
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+
+    pca = PCA(n_components=2)
+    X_r = pca.fit(pairplot_df).transform(pairplot_df).T
+    pca_x = X_r[0]
+    pca_y = X_r[1]
+
+    unique_labels = set(labels)
+    np.transpose(unique_labels)
+    for label in unique_labels: 
+        mask = np.where(labels==label)[0]
+
+        ax.scatter(pca_x[mask], pca_y[mask], s=2)
+        ax.set(title=f'n clusters: {n_clusters_}')
+        
+    # Number of clusters in labels, ignoring noise if present.
+
+    save_fig(save_path.replace('.','[pca-dbscan].'))
+
 # Post Processing Related
 
 def plot_heights_distribution(shadows_gdf, save_path:str=None, dpi:int=dpi): 

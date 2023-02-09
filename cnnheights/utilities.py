@@ -79,6 +79,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     import geopandas as gpd 
     import numpy as np
     from shapely.geometry import LineString, box
+    from cnnheights.utilities import longest_side
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
     annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
@@ -110,7 +111,10 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
          'bounds_geometry':[box(*i) for i in square_bounds],
          'heights':heights, 
          'line_geometries':shadow_lines, 
-         'lengths':shadow_lengths}
+         'lengths':shadow_lengths, 
+         'areas':annotations_gdf['geometry'].area, 
+         'perimeters':annotations_gdf['geometry'].length,
+         'diameters':gpd.GeoSeries(longest_side(annotations_gdf['geometry']))}
     
     shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
     shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
@@ -121,6 +125,32 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
         shadows_gdf.to_file(save_path, index=False)
 
     return shadows_gdf
+
+def longest_side(polygons:list):
+    '''
+    Notes
+    -----
+        - This code is so inefficient...but will work for now. it calculates longest side length \
+        - polygons needs to be list of polygon objects 
+
+    '''
+    import numpy as np
+
+    longest_lengths = []
+    for polygon in polygons: 
+        coords = list([list(i) for i in polygon.exterior.coords])
+        coords = coords+[coords[0]]
+        lengths = []
+        for i in range(len(coords)-1): 
+            left = coords[i]
+            right = coords[i+1]
+            dist = np.sqrt((left[0]-right[0])**2+(left[1]-right[1])**2)
+            lengths.append(dist)
+        
+        longest_length = np.max(lengths)
+        longest_lengths.append(longest_length)
+
+    return longest_lengths
 
 ## PREPROCESS UTILITIES ## 
 
