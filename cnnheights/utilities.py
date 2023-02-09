@@ -198,7 +198,7 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
     else: 
         d = {'geometry':[extracted_polygon], 'centroidsx':[centroid[0]], 'centroidsy':[centroid[1]]}
         key_gdf = gpd.GeoDataFrame(d, crs=crs) #lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
-        print(key_gdf)
+        key_gdf.to_file(key)
 
     if plot_path is not None: 
         # load img here using rasterio
@@ -216,7 +216,7 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
         
         save_fig(plot_path, dpi)
 
-    output_tif = os.path.join(output_path, f'cutout_{counter}.tiff')
+    output_tif = os.path.join(output_path, f'cutout_{counter}.tif')
 
     with rasterio.open(output_tif, 'w',
             driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
