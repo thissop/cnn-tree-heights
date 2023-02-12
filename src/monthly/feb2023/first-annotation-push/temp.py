@@ -3,13 +3,23 @@ import time
 from cnnheights.utilities import shadows_from_annotations, height_from_shadow
 from cnnheights.plotting import plot_shadow_lengths
 def count_polys():
-    for i in [0,2]:  
+
+    polys = []
+
+    for i in [0,1,2,3]:  
         gdf = gpd.read_file(f'/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_{i}/annotations_{i}.gpkg')
-        print(len(gdf.index))
+        polys.append(len(gdf.index))
 
     # 0: 309 
-    # 1: 157
+    # 1: 66
+    # 2: 165
+
+    print(polys)
+    print(sum(polys))
+
 count_polys()
+
+quit()
 
 def make_shadow_gdfs(): 
 
@@ -17,6 +27,7 @@ def make_shadow_gdfs():
 
     s1 = time.time()
     af0 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_0/annotations_0.gpkg'
+    af1 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_1/annotations_1.gpkg'
     af2 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_2/annotations_2.gpkg'
 
     background_0 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_0/cutout_0.tif'
@@ -62,7 +73,9 @@ def plot_diagnostics():
     import time 
 
     af0 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_0/annotations_0.gpkg'
+    af1 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_1/annotations_1.gpkg'
     af2 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_2/annotations_2.gpkg'
+
 
     s1 = time.time()
     background_0 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_0/cutout_0.tif'
@@ -73,6 +86,13 @@ def plot_diagnostics():
 
     print('t1', time.time()-s1)
     
+    s1 = time.time()
+    background_1 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_1/cutout_1.tif'
+    shadows_gdf_1 = shadows_from_annotations(af1, cutlines_shp=cutlines, north=1693717.05, east=449094.71, epsg='32628')
+    shadows_1_plot = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/feb2023/first-annotation-push/plots/annotations/annotations_1.pdf'
+    plot_shadow_lengths(shadows_gdf_1, background_tif=background_1, save_path=shadows_1_plot)
+    print('t1', time.time()-s1)
+
     s2 = time.time()
     background_2 = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_2/cutout_2.tif'
     shadows_gdf_2 = shadows_from_annotations(af2, cutlines_shp=cutlines, north=1706616.040, east=447832.579, epsg='32628')
@@ -82,6 +102,9 @@ def plot_diagnostics():
 
     plot_path_0 = 'src/monthly/feb2023/first-annotation-push/plots/diagnostics/diagnostic_0.pdf'
     plot_annotation_diagnostics(shadows_gdf_0, plot_path_0)
+
+    plot_path_1 = 'src/monthly/feb2023/first-annotation-push/plots/diagnostics/diagnostic_1.pdf'
+    plot_annotation_diagnostics(shadows_gdf_1, plot_path_1)
 
     plot_path_2 = 'src/monthly/feb2023/first-annotation-push/plots/diagnostics/diagnostic_2.pdf'
     plot_annotation_diagnostics(shadows_gdf_2, plot_path_2)
