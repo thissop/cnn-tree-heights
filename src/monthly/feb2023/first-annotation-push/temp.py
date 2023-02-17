@@ -6,16 +6,13 @@ def count_polys():
 
     polys = []
 
-    for i in [0,1,2,3]:  
-        gdf = gpd.read_file(f'/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/cutout_{i}/annotations_{i}.gpkg')
+    for i in [0,1,2,3,4]:  
+        gdf = gpd.read_file(f'/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/individual_cutouts/cutout_{i}/annotations_{i}.gpkg')
         polys.append(len(gdf.index))
 
-    # 0: 309 
-    # 1: 66
-    # 2: 165
-
-    print(polys)
-    print(sum(polys))
+    print(polys) # [309, 137, 165, 370, 535]
+    print(sum(polys)) # 1516
+    print(sum(polys)-polys[2]) # 1351
 
 count_polys()
 

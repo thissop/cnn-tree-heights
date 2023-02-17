@@ -116,7 +116,7 @@ def train_cnn(ndvi_images:list,
 
     return model, loss_history
 
-def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
+def predict(model, ndvi_image, pan_image, output_dir:str, crs:str, pyproj_datadir:str='/home/fjuhsd/miniconda3/envs/cnnheights310/share/proj'):
     r'''
     
     NOTES
@@ -135,7 +135,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     from itertools import product
 
     import pyproj
-    pyproj.datadir.set_data_dir('/home/fjuhsd/miniconda3/envs/cnnheights38/share/proj')
+    pyproj.datadir.set_data_dir(pyproj_datadir)
 
     ndvi_image = rasterio.open(ndvi_image)
     pan_image = rasterio.open(pan_image)

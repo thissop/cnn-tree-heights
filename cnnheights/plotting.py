@@ -82,7 +82,7 @@ def plot_annotations_gallery(shadows_gdf, background_tif:str, polygon_alpha:floa
     TO DO 
     -----
     - need to make this more efficient? right now it's replotting the raster for every single axis, and then just clipping the axis' bounsds.
-    '''
+    ''' 
 
     import numpy as np
     import rasterio 

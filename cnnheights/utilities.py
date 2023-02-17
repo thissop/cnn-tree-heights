@@ -163,6 +163,7 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
     Notes
     -----
     - note for jesse: opening from this window saves crazy memory. 
+    - FIX THE vector background!!
 
     '''
     import rasterio 
@@ -179,7 +180,6 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
     import numpy as np
     import geopandas as gpd 
     from cnnheights.plotting import save_fig
-    from blend_modes import lighten_only
 
     dataset = rasterio.open(input_tif) 
 
@@ -252,6 +252,28 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
             driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
             dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
         new_data_set.write(img)#, indexes=2)
+
+    output_ndvi = output_path+f'cutout_{counter}/raw_ndvi_{counter}.tif'
+    output_pan = output_path+f'cutout_{counter}/raw_pan_{counter}.tif'
+
+    cutout_raster = rasterio.open(output_tif)
+    width = cutout_raster.width
+    height = cutout_raster.height
+
+    panImg = np.array([cutout_raster.read(1)])
+    ndviImg = np.array([cutout_raster.read(2)])
+
+    with rasterio.open(output_ndvi, 'w',
+        driver='GTiff', width=width, height=height, count=1,
+        dtype=ndviImg.dtype, crs=cutout_raster.crs, transform=window_transform) as ndvi_dataset:
+        ndvi_dataset.write(ndviImg)#, indexes=2)
+
+    with rasterio.open(output_pan, 'w',
+        driver='GTiff', width=width, height=height, count=1,
+        dtype=panImg.dtype, crs=cutout_raster.crs, transform=window_transform) as pan_dataset:
+        pan_dataset.write(ndviImg)#, indexes=2)
+
+    cutout_raster.close()
 
     vector_rect_path = os.path.join(output_path, f'vector_rectangle_{counter}.gpkg')
     vector_rectangle = gpd.GeoDataFrame({'geometry':[extracted_polygon]}, crs=crs)
@@ -334,6 +356,10 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         overlapppedAreas.update(imOverlapppedAreasNdvi)
         
         allAreas = set(areasWithPolygons.keys())
+
+        print(overlapppedAreas)
+        print(allAreas)
+
         if allAreas.difference(overlapppedAreas):
             print(f'Warning: Could not find a raw image corresponding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
 
@@ -382,15 +408,20 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
     
     overlapppedAreas = set() # small question, but why set? 
     #print(areasWithPolygons)
-    
+    print('about to look into finding overlap')
     for areaID, areaInfo in areasWithPolygons.items():
         #Convert the polygons in the area in a dataframe and get the bounds of the area. 
         polygonsInAreaDf = gps.GeoDataFrame(areaInfo['polygons'])
         boundariesInAreaDf = gps.GeoDataFrame(areaInfo['boundaryWeight'])    
         bboxArea = box(*areaInfo['bounds'])
         bboxImg = box(*img.bounds)
+
+        print(bboxArea)
+        print(bboxImg)
+
         #Extract the window if area is in the image
         if(bboxArea.intersects(bboxImg)):
+            print('intersects')
             profile = img.profile  
             sm = mask(img, [bboxArea], all_touched=True, crop=True )
             profile['height'] = sm[0].shape[1]
@@ -401,10 +432,13 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
             profile['blockxsize'] = 32
             profile['blockysize'] = 32
             profile['count'] = 1
-            profile['dtype'] = rasterio.float32
+            profile['dtype'] = rasterio.float32 # rasterio.float32 # THIS GOT CHANGED! CHANGE BACK? or unint32?? # maybe fix this
             # write_extracted writes the image, annotation and boundaries and returns the counter of the next file to write. 
             writeCounter = write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imageFilename, annotationFilename, boundaryFilename, bands, writeCounter)
             overlapppedAreas.add(areaID)
+
+        else: 
+            print('not in area??')
 
     return(writeCounter, overlapppedAreas)
 
@@ -413,17 +447,22 @@ def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writ
     Write the part of raw image that overlaps with a training area into a separate image file. 
     Use rowColPolygons to create and write annotation and boundary image from polygons in the training area.
     Note: original name was: writeExtractedImageAndAnnotation
+
+    To Do: remove img from args because it's not used? will need to make chagnes to other files that reference it. 
+
     """
 
     import os 
     import rasterio 
     from cnnheights.utilities import row_col_polygons
-
+    import numpy as np
+    print('about to try to write extracted')
     try:
         for band, imFn in zip(bands, imagesFilename):
             # Rasterio reads file channel first, so the sm[0] has the shape [1 or ch_count, x,y]
-            # If raster has multiple channels, then bands will be [0, 1, ...] otherwise simply [0]
+            # If raster has multiple channels, then bands will be [0, 1, ...] otherwise simply [0] # can i remove this? 
             dt = sm[0][band].astype(profile['dtype'])
+
             if normalize: # Note: If the raster contains None values, then you should normalize it separately by calculating the mean and std without those values.
                 dt = image_normalize(dt, axis=None) #  Normalize the image along the width and height, and since here we only have one channel we pass axis as None # FIX THIS!
             with rasterio.open(os.path.join(writePath, imFn+'_{}.png'.format(writeCounter)), 'w', **profile) as dst:

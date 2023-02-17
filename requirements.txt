@@ -8,3 +8,8 @@ scikit-learn
 seaborn
 shapely
 pvlib
+fiona
+pyproj
+cv2
+pillow
+tensorflow

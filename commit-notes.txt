@@ -1,0 +1,54 @@
+- changed sample background code so it creates the raw ndvi/pan images by default (so preprocessing can use them, and so that I don't have to extract them via qgis)
+
+- replaced vector rectangles and fixed how they were created (well I think it creates it fine the first time, but it might skip replacing the vector rectangle when you have re-runs on same paths)
+
+- Warning: Could not find a raw image corresponding to {0} areas. Make sure that you have provided the correct paths!
+
+    - so then extracted with usual method, but then got new errors. 
+
+- just ended up hand extracting them (what Jesse talks about...MVP)
+
+- ERROR 6: PNG driver doesn't support data type Float32. Only eight bit (Byte) and sixteen bit (UInt16) bands supported. 
+
+but tiff is uint16?? both images are unit8???
+
+- first time i tried to run preprocess on my sample data function that automated some extraction (
+
+- PNG driver doesn't support data type Int16. Only eight bit (Byte) and sixteen bit (UInt16) bands supported.  
+
+- original reason I wanted to replace those things was that it seemed like prone to errors on user (change file path multiple times, extent selection, band to extract, etc.)
+
+- UGHHH>... I changed the tiff image creation step in my code driver to PNG not GTiff and still won't work 
+ 
+- lol. I think I found the problem. the vector rectangle might be the same size as the cutout, which could have issues? maybe it has to be slightly smaller...if this is the issue, LOL that moment when ur degbuging the wrong thing. 
+
+- bbox area and bbox image have different values: 
+POLYGON ((465017.310663 1691468.70945, 465017.310663 1691996.70945, 464489.310663 1691996.70945, 464489.310663 1691468.70945, 465017.310663 1691468.70945))
+POLYGON ((1056 1056, 1056 0, 0 0, 0 1056, 1056 1056))
+
+is one in coords, the other in pixels? I'll check w old data
+
+- LOL I AM A FOOL. THE RAW FILES NEED TO BE TIFF???
+
+- I really wish I had my NASA account because these were things that were covered in jesse's videos. I was making raw files for input into preprocessing png, and then when I compared to old data from summer, input pan and ndvi files for preprocessing were still tif! 
+    - this led to the issue of the no overlap. However, I found an issue because the tiff would still write to 0,1056 bounds, not the bounds of the original tif file. 
+    - this is the problem (confirmed). in my sample_background code, when I extract the cutout tif from the main, apparently it sets the bounds to 0,1056 which is wrong, because the cutout bounds for the old pan and tif data from the summer are like BoundingBox(left=468695.810663, bottom=1706647.70945, right=468969.310663, top=1706877.20945)
+    - hence, the issue is in the first cutout creation step, because the step where i taek out the ndvi and pan from that cutout is good now (that i've fixed it to saving as tif)
+    - need to fix this!!
+    - need to branch even more (and every time I come off development even...it's frusterating not to have working version to go back to)
+    - yep. I just tested a new version of the sample code. I didn't include the window transform when I was writing the new images from the window because I thought originally it would mess them up and do some sort of double transform (I though their internal coordinates were already transformed, but apparently not. )
+
+    - NEED TO EXPLAIN THIS IN EMAIL IN DEPTH! 
+    - this is an example of overcoming problems and sticking thru them (root problem: don't have nasa videos bc no nasa account access.)
+    - mention coincidentally epic hobbit music was playing when i discovered this. yessir. 
+
+    - luckily for some reason the original cutout kept the bounds, so I can apply them post-facto. 
+
+- UGH. SUCCESSFULLY FIXED BOUND COORDS OF IMAGES. NEW ISSUE NOW!! WHAAAAAAAAT
+
+    raise ValueError('Input shapes do not overlap raster.')
+ValueError: Input shapes do not overlap raster.
+
+- LOL I FIXED IT OH MY LET'S GOOOOOOO
+
+x1 and y1 were messed up (they were supposed to be (0,0) but i did (0,1056))
