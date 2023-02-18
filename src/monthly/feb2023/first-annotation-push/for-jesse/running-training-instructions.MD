@@ -22,5 +22,3 @@ c:\\Users\\myname\\Anaconda3\\envs\\main\\lib\\site-packages\\pyproj\\proj_dir\\
 ```
 
 ## Run Training Pipeline
-
-annoying thing

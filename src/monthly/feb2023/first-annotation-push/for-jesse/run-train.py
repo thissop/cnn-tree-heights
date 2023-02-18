@@ -26,7 +26,6 @@ def run_train(data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-
          pyproj_datadir = pyproj.datadir.get_data_dir()
          ```    
 
-
     Notes 
     -----
 

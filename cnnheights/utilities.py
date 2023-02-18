@@ -154,7 +154,7 @@ def longest_side(polygons:list):
 
 ## PREPROCESS UTILITIES ## 
 
-def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1056,1056), dpi=350):
+def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1056,1056), dpi=350):
     r'''
 
     TO DO 
@@ -204,6 +204,11 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
         window_transform = transform(window, dataset.transform) 
         extent = plot.plotting_extent(img, window_transform) 
 
+        x1 = extent[0]
+        x2 = extent[1]
+        y1 = extent[2]
+        y2 = extent[3]
+
         extracted_polygon = Polygon(((x1,y1), (x2,y1), (x2, y2), (x1,y2))) 
 
         if extant_key: 
@@ -224,6 +229,7 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
              'centroidsy':[centroid[1]]+key_gdf['centroidsy'].to_list()}
 
         key_gdf = gpd.GeoDataFrame(d, crs=crs)
+        key_gdf.to_file(key)
 
     else: 
         d = {'geometry':[extracted_polygon], 'centroidsx':[centroid[0]], 'centroidsy':[centroid[1]]}
@@ -246,15 +252,19 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
         
         save_fig(plot_path, dpi)
 
-    output_tif = os.path.join(output_path, f'cutout_{counter}.tif')
+    output_dir = os.path.join(output_dir, f'cutout_{counter}')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    output_tif = os.path.join(output_dir, f'cutout_{counter}.tif')
 
     with rasterio.open(output_tif, 'w',
             driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
             dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
         new_data_set.write(img)#, indexes=2)
 
-    output_ndvi = output_path+f'cutout_{counter}/raw_ndvi_{counter}.tif'
-    output_pan = output_path+f'cutout_{counter}/raw_pan_{counter}.tif'
+    output_ndvi = os.path.join(output_dir, f'raw_ndvi_{counter}.tif')
+    output_pan = os.path.join(output_dir, f'raw_pan_{counter}.tif')
 
     cutout_raster = rasterio.open(output_tif)
     width = cutout_raster.width
@@ -275,7 +285,7 @@ def sample_background(input_tif:str, output_path:str, crs:str, key:str=None, cou
 
     cutout_raster.close()
 
-    vector_rect_path = os.path.join(output_path, f'vector_rectangle_{counter}.gpkg')
+    vector_rect_path = os.path.join(output_dir, f'vector_rectangle_{counter}.gpkg')
     vector_rectangle = gpd.GeoDataFrame({'geometry':[extracted_polygon]}, crs=crs)
     vector_rectangle.to_file(vector_rect_path, driver='GPKG')#, layer='name')
 
