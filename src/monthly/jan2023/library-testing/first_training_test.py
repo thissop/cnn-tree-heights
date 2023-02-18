@@ -7,7 +7,7 @@ pan_images = []
 annotations = [] 
 boundaries = []
 
-# [1] 435172
+# [1] 
 # python /ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/src/monthly/jan2023/library-testing/first_training_test.py > /ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights/output/log.txt &
 
 computer = 'wh1' # input('m2, wh1, or wsl: ')
@@ -42,8 +42,14 @@ for file in np.sort(os.listdir(data_dir)):
             pan_images.append(full_path) 
 
 model, hist = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=logging_dir)
+
+modelpredtictions = model.predict(tpx, batch_size=8)
+
 from cnnheights.plotting import plot_training_diagnostics
 
 figs = plot_training_diagnostics(loss_history=hist, save_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/src/monthly/jan2023/library-testing/training-diagnostic-plots/big-batch')
 
 # [1] 452989
+
+
+

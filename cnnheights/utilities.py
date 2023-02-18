@@ -11,7 +11,7 @@ def height_from_shadow(shadow_length:float, zenith_angle:float):
     '''
     import numpy as np
     
-    height = shadow_length/np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
+    height = shadow_length*np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
      # H = L tan (x), where x is solar elevation angle from ground? 
     return height 
 
@@ -79,12 +79,14 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     import geopandas as gpd 
     import numpy as np
     from shapely.geometry import LineString, box
+    from cnnheights.utilities import longest_side
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
+    annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
 
     annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
-
-    centroids = annotations_gdf.centroid
+   
+    centroids = annotations_gdf.centroid    
 
     cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
 
@@ -96,6 +98,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     shadow_lengths = shadow_lines.length
 
     heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
+    print(cutline_info['SUN_ELEV'])
 
     bounds = annotations_gdf.bounds
     dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
@@ -108,16 +111,185 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
          'bounds_geometry':[box(*i) for i in square_bounds],
          'heights':heights, 
          'line_geometries':shadow_lines, 
-         'lengths':shadow_lengths}
+         'lengths':shadow_lengths, 
+         'areas':annotations_gdf['geometry'].area, 
+         'perimeters':annotations_gdf['geometry'].length,
+         'diameters':gpd.GeoSeries(longest_side(annotations_gdf['geometry']))}
     
-    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}')
+    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
+    shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
+
+    print(shadows_gdf)
 
     if save_path is not None: 
-        shadows_gdf.to_file(save_path)
+        shadows_gdf.to_file(save_path, index=False)
 
     return shadows_gdf
 
+def longest_side(polygons:list):
+    '''
+    Notes
+    -----
+        - This code is so inefficient...but will work for now. it calculates longest side length \
+        - polygons needs to be list of polygon objects 
+
+    '''
+    import numpy as np
+
+    longest_lengths = []
+    for polygon in polygons: 
+        coords = list([list(i) for i in polygon.exterior.coords])
+        coords = coords+[coords[0]]
+        lengths = []
+        for i in range(len(coords)-1): 
+            left = coords[i]
+            right = coords[i+1]
+            dist = np.sqrt((left[0]-right[0])**2+(left[1]-right[1])**2)
+            lengths.append(dist)
+        
+        longest_length = np.max(lengths)
+        longest_lengths.append(longest_length)
+
+    return longest_lengths
+
 ## PREPROCESS UTILITIES ## 
+
+def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1056,1056), dpi=350):
+    r'''
+
+    TO DO 
+    -----
+
+    Notes
+    -----
+    - note for jesse: opening from this window saves crazy memory. 
+    - FIX THE vector background!!
+
+    '''
+    import rasterio 
+
+    # randomly choose left corner 
+    # eventually, make sure no overlap with other regions 
+
+    import matplotlib.pyplot as plt
+    from rasterio import plot
+    from rasterio.windows import transform
+    import rasterio
+    from shapely.geometry import Polygon
+    import os 
+    import numpy as np
+    import geopandas as gpd 
+    from cnnheights.plotting import save_fig
+
+    dataset = rasterio.open(input_tif) 
+
+    dims = (dataset.width, dataset.height) 
+
+    extant_key = False 
+    if key is not None and os.path.exists(key):
+        extant_key = True 
+
+    overlapping = True 
+    while overlapping: 
+
+        x1, y1 = (np.random.randint(0,dims[0]-sample_dim[0]), np.random.randint(0,dims[1]-sample_dim[1])) ## FIXX!! 
+        x2, y2 = (x1+sample_dim[0], y1+sample_dim[1])
+
+        window = rasterio.windows.Window(x1, y1, sample_dim[0], sample_dim[1]) 
+        img = dataset.read(window=window) 
+        # read both layers with dataset.read(window=window)
+        # read first layer with dataset.read(1, window=window)
+        # read second layer with dataset.read(2, window=window)
+     
+        window_transform = transform(window, dataset.transform) 
+        extent = plot.plotting_extent(img, window_transform) 
+
+        x1 = extent[0]
+        x2 = extent[1]
+        y1 = extent[2]
+        y2 = extent[3]
+
+        extracted_polygon = Polygon(((x1,y1), (x2,y1), (x2, y2), (x1,y2))) 
+
+        if extant_key: 
+            key_gdf = gpd.read_file(key)
+            extracted_geometries = key_gdf['geometry']
+
+            overlapping = extracted_geometries.overlaps(extracted_polygon)[0]
+
+        else: 
+            overlapping = False      
+            
+    centroid = [np.median(extent[0:2]), np.median(extent[3:5])]
+
+    if extant_key: 
+        key_gdf = gpd.read_file(key)
+        d = {'geometry':[extracted_polygon]+key_gdf['geometry'].to_list(),
+             'centroidsx':[centroid[0]]+key_gdf['centroidsx'].to_list(), 
+             'centroidsy':[centroid[1]]+key_gdf['centroidsy'].to_list()}
+
+        key_gdf = gpd.GeoDataFrame(d, crs=crs)
+        key_gdf.to_file(key)
+
+    else: 
+        d = {'geometry':[extracted_polygon], 'centroidsx':[centroid[0]], 'centroidsy':[centroid[1]]}
+        key_gdf = gpd.GeoDataFrame(d, crs=crs) #lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
+        key_gdf.to_file(key)
+
+    if plot_path is not None: 
+        # load img here using rasterio
+        fig, ax = plt.subplots(figsize=(5,5))
+
+        plot.show(img[0], origin='upper', transform=window_transform, 
+                  extent=extent, interpolation=None, ax=ax, vmin=250, vmax=750, cmap='Greys_r')
+        plot.show(img[1], origin='upper', transform=window_transform, 
+                  extent=extent, interpolation=None, cmap='Reds', ax=ax, alpha=0.5)
+        
+        #blended = lighten_only(np.array([img[0].astype(float)]), np.array([img[1].astype(float)]), opacity=0.5)
+        #ax.plot(blended)
+        
+        ax.set_aspect('equal', 'box')
+        
+        save_fig(plot_path, dpi)
+
+    output_dir = os.path.join(output_dir, f'cutout_{counter}')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    output_tif = os.path.join(output_dir, f'cutout_{counter}.tif')
+
+    with rasterio.open(output_tif, 'w',
+            driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
+            dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
+        new_data_set.write(img)#, indexes=2)
+
+    output_ndvi = os.path.join(output_dir, f'raw_ndvi_{counter}.tif')
+    output_pan = os.path.join(output_dir, f'raw_pan_{counter}.tif')
+
+    cutout_raster = rasterio.open(output_tif)
+    width = cutout_raster.width
+    height = cutout_raster.height
+
+    panImg = np.array([cutout_raster.read(1)])
+    ndviImg = np.array([cutout_raster.read(2)])
+
+    with rasterio.open(output_ndvi, 'w',
+        driver='GTiff', width=width, height=height, count=1,
+        dtype=ndviImg.dtype, crs=cutout_raster.crs, transform=window_transform) as ndvi_dataset:
+        ndvi_dataset.write(ndviImg)#, indexes=2)
+
+    with rasterio.open(output_pan, 'w',
+        driver='GTiff', width=width, height=height, count=1,
+        dtype=panImg.dtype, crs=cutout_raster.crs, transform=window_transform) as pan_dataset:
+        pan_dataset.write(ndviImg)#, indexes=2)
+
+    cutout_raster.close()
+
+    vector_rect_path = os.path.join(output_dir, f'vector_rectangle_{counter}.gpkg')
+    vector_rectangle = gpd.GeoDataFrame({'geometry':[extracted_polygon]}, crs=crs)
+    vector_rectangle.to_file(vector_rect_path, driver='GPKG')#, layer='name')
+
+    return key_gdf
 
 ## HEIGHTS UTILITIES ##
 def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
@@ -194,6 +366,10 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         overlapppedAreas.update(imOverlapppedAreasNdvi)
         
         allAreas = set(areasWithPolygons.keys())
+
+        print(overlapppedAreas)
+        print(allAreas)
+
         if allAreas.difference(overlapppedAreas):
             print(f'Warning: Could not find a raw image corresponding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
 
@@ -242,15 +418,20 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
     
     overlapppedAreas = set() # small question, but why set? 
     #print(areasWithPolygons)
-    
+    print('about to look into finding overlap')
     for areaID, areaInfo in areasWithPolygons.items():
         #Convert the polygons in the area in a dataframe and get the bounds of the area. 
         polygonsInAreaDf = gps.GeoDataFrame(areaInfo['polygons'])
         boundariesInAreaDf = gps.GeoDataFrame(areaInfo['boundaryWeight'])    
         bboxArea = box(*areaInfo['bounds'])
         bboxImg = box(*img.bounds)
+
+        print(bboxArea)
+        print(bboxImg)
+
         #Extract the window if area is in the image
         if(bboxArea.intersects(bboxImg)):
+            print('intersects')
             profile = img.profile  
             sm = mask(img, [bboxArea], all_touched=True, crop=True )
             profile['height'] = sm[0].shape[1]
@@ -261,10 +442,13 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
             profile['blockxsize'] = 32
             profile['blockysize'] = 32
             profile['count'] = 1
-            profile['dtype'] = rasterio.float32
+            profile['dtype'] = rasterio.float32 # rasterio.float32 # THIS GOT CHANGED! CHANGE BACK? or unint32?? # maybe fix this
             # write_extracted writes the image, annotation and boundaries and returns the counter of the next file to write. 
             writeCounter = write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imageFilename, annotationFilename, boundaryFilename, bands, writeCounter)
             overlapppedAreas.add(areaID)
+
+        else: 
+            print('not in area??')
 
     return(writeCounter, overlapppedAreas)
 
@@ -273,17 +457,22 @@ def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writ
     Write the part of raw image that overlaps with a training area into a separate image file. 
     Use rowColPolygons to create and write annotation and boundary image from polygons in the training area.
     Note: original name was: writeExtractedImageAndAnnotation
+
+    To Do: remove img from args because it's not used? will need to make chagnes to other files that reference it. 
+
     """
 
     import os 
     import rasterio 
     from cnnheights.utilities import row_col_polygons
-
+    import numpy as np
+    print('about to try to write extracted')
     try:
         for band, imFn in zip(bands, imagesFilename):
             # Rasterio reads file channel first, so the sm[0] has the shape [1 or ch_count, x,y]
-            # If raster has multiple channels, then bands will be [0, 1, ...] otherwise simply [0]
+            # If raster has multiple channels, then bands will be [0, 1, ...] otherwise simply [0] # can i remove this? 
             dt = sm[0][band].astype(profile['dtype'])
+
             if normalize: # Note: If the raster contains None values, then you should normalize it separately by calculating the mean and std without those values.
                 dt = image_normalize(dt, axis=None) #  Normalize the image along the width and height, and since here we only have one channel we pass axis as None # FIX THIS!
             with rasterio.open(os.path.join(writePath, imFn+'_{}.png'.format(writeCounter)), 'w', **profile) as dst:

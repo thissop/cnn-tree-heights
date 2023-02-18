@@ -115,7 +115,8 @@ variable_name : `type`
 │       ├── extracted_pan_8.png
 │       └── extracted_pan_9.png
 ├── notes
-│   └── annotation-and-extraction.MD
+│   ├── annotation-and-extraction.MD
+│   └── qgis-notes.md
 ├── requirements.txt
 ├── setup.py
 ├── src
@@ -177,10 +178,34 @@ variable_name : `type`
 │   │       └── determine_tree_heights.py
 │   ├── monthly
 │   │   ├── feb2023
-│   │   │   └── annotation_gallery
+│   │   │   ├── annotation_gallery
+│   │   │   │   ├── dev.py
+│   │   │   │   ├── first_multi_gallery.pdf
+│   │   │   │   └── first_single_gallery.pdf
+│   │   │   ├── annotations_over_tiff
+│   │   │   │   ├── dev.py
+│   │   │   │   ├── first_plot.pdf
+│   │   │   │   └── first_plot.png
+│   │   │   ├── autosegment-exploring
+│   │   │   │   ├── thoughts.txt
+│   │   │   │   └── Снимок экрана 2023-02-01 в 13.51.44.png
+│   │   │   ├── heights-distribution
+│   │   │   │   ├── first_demo.png
+│   │   │   │   └── first_demo.py
+│   │   │   └── sample_generation
+│   │   │       ├── cutout_0.pdf
+│   │   │       ├── cutout_1.pdf
+│   │   │       ├── cutout_2.pdf
+│   │   │       ├── cutout_3.pdf
+│   │   │       ├── cutout_4.pdf
 │   │   │       ├── dev.py
-│   │   │       ├── first_multi_gallery.pdf
-│   │   │       └── first_single_gallery.pdf
+│   │   │       ├── get-dim.py
+│   │   │       └── key_gdf_file.feather
+│   │   │           ├── key_gdf_file.cpg
+│   │   │           ├── key_gdf_file.dbf
+│   │   │           ├── key_gdf_file.prj
+│   │   │           ├── key_gdf_file.shp
+│   │   │           └── key_gdf_file.shx
 │   │   └── jan2023
 │   │       ├── compute-shadow-length
 │   │       │   ├── dummy.txt
@@ -279,5 +304,5 @@ variable_name : `type`
 │       └── sort-requirements.py
 └── temp.txt
 
-38 directories, 204 files
+43 directories, 224 files
 ```

@@ -30,7 +30,7 @@ def file_only(fp):
 #for i in range(len(ndvi)):
 #    print([file_only(j) for j in [ndvi[i], pan[i], backgrounds[i], annotations[i]]])
 
-out_dir = '/Users/yaroslav/Documents/Work/NASA/data/my current/cnn-input/'
+out_dir = '/Users/yaroslav/Downloads/temp/'
 
 for i in os.listdir(out_dir):
     os.remove(out_dir+i)
