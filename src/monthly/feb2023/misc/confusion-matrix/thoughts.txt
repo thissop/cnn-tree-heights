@@ -1,0 +1,19 @@
+maybe the way to get the confusion matrix is from the raw predicted numpy array mask?
+
+specifically the following part: 
+
+    th = 0.5
+    mask = maskF.copy()
+    mask[mask < th] = 0
+    mask[mask >= th] = 1
+
+look for where the neural net calculates y_true and use that...don't back track (but need to write up and describe method for Jesse to build what I've done)
+- initially, i was attempting to save the predictions to polygon file, then extract the pixels that were contained by predicted polygons, and then do the same for those contained by the true annotated polygons. then I would just calculate confusion matrix on two 2d 0/1 populated matrices. this proved to be super hard though, so I stumbled across something in the code which made me realize there were alreaday rasterized y arrays being used by the model (which makes sense), so I wondered if i could incorporate this as a step. 
+five more minutes and done with nasa for day...do psyche in car lol
+
+need to describe the steps i took to him. 
+
+most of my time wednesday was on tinkering with confusion matrix...I'd worked with them before but 
+
+https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html 
+https://scikit-learn.org/stable/modules/generated/sklearn.metrics.ConfusionMatrixDisplay.html

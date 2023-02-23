@@ -11,10 +11,10 @@ boundaries = []
 # [1] 
 # python /ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/src/monthly/jan2023/library-testing/first_training_test.py > /ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights/output/log.txt &
 
-computer = 'wh1' # input('m2, wh1, or wsl: ')
+computer = 'm2' # input('m2, wh1, or wsl: ')
 
 if computer == 'm2': 
-    data_dir = '/Users/yaroslav/Documents/Work/NASA/data/first_mosaic/rebuilt_approach/output/'
+    data_dir = '/Users/yaroslav/Documents/Work/NASA/data/old/ready-for-cnn/cnn-input/'
     logging_dir = '/Users/yaroslav/Documents/GitHub/cnn-tree-heights/src/monthly/jan2023/library-testing/cnn-training-output'
 
 elif computer == 'wh1': 

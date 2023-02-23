@@ -34,10 +34,8 @@ def fix_vector_rectangles():
         extracted_polygon = Polygon(((b[0],b[1]), (b[2],b[1]), (b[2], b[3]), (b[0],b[3]))) 
         vector_gdf = gpd.GeoDataFrame({'geometry':[extracted_polygon]}, crs=raster.crs)
         vector_gdf.to_file(area_files[i])
-
+        print(vector_gdf['geometry'])
         raster.close()
-
-#fix_vector_rectangles()
 
 def preprocess_them_all(): 
 
@@ -63,7 +61,7 @@ def preprocess_them_all():
     output_path = '/Users/yaroslav/Documents/Work/NASA/data/first-annotations-push/first-shadows-dataset'
     preprocess(area_files=area_files, annotation_files=annotation_files, raw_ndvi_images=raw_ndvi_images, raw_pan_images=raw_pan_images, output_path=output_path)
 
-preprocess_them_all()
+#preprocess_them_all()
 
 def check_dtypes():
     import rasterio
@@ -95,30 +93,43 @@ def make_ndvi_pan():
         output_pan = data_base+f'cutout_{i}/raw_pan_{i}.tif'
 
         cutout_raster = rasterio.open(cutout)
-        bounds = cutout_raster.bounds 
-        print(bounds)
+        b = cutout_raster.bounds 
         width = cutout_raster.width
         height = cutout_raster.height
+        
+        transform = rasterio.transform.from_bounds(b[0], b[1], b[2], b[3], width=width, height=height)
+
+        #window = rasterio.windows.Window(bounds[0], bounds[2], width, height) 
+
+        #window_transform = transform(window, cutout_raster.transform) 
 
         panImg = np.array([cutout_raster.read(1)])
         ndviImg = np.array([cutout_raster.read(2)])
 
         with rasterio.open(output_ndvi, 'w',
             driver='GTiff', width=width, height=height, count=1, 
-            dtype=ndviImg.dtype, crs=cutout_raster.crs) as ndvi_dataset:
+            dtype=ndviImg.dtype, crs=cutout_raster.crs, transform=transform) as ndvi_dataset:
             ndvi_dataset.write(ndviImg)#, indexes=2)
 
         with rasterio.open(output_pan, 'w', 
             driver='GTiff', width=width, height=height, count=1,
-            dtype=panImg.dtype, crs=cutout_raster.crs) as pan_dataset:
-            pan_dataset.write(ndviImg)#, indexes=2)
+            dtype=panImg.dtype, crs=cutout_raster.crs, transform=transform) as pan_dataset:
+            pan_dataset.write(panImg)#, indexes=2)
 
         cutout_raster.close()
 
         with rasterio.open(output_ndvi, 'r') as raster: 
             print(raster.bounds)
 
-#make_ndvi_pan()
+        with rasterio.open(output_pan, 'r') as raster: 
+            print(raster.bounds)
+
+# ISSUE LIES WITH NDVI PAN EXTRACTION (ONLY WRITING NDVI, )
+
+make_ndvi_pan()
+#fix_vector_rectangles()
+
+preprocess_them_all()
 
 def check_old_bounds():
     import rasterio 
