@@ -380,7 +380,7 @@ def divide_training_polygons(trainingPolygon, trainingArea, show_boundaries_duri
     Weight map will be used by the weighted loss during the U-Net training
 
     I.E. Assign annotated ploygons in to the training areas.
-    Note: older name was divide_polygons_in_training_areas
+    Note: older name was divide_polygons_in_training_areas and I think the even older name was dividePolygonsInTrainingAreas
    ''' 
 
     # For efficiency, assigned polygons are removed from the list, we make a copy here. 
