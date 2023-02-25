@@ -228,7 +228,8 @@ def train_cnn(ndvi_images:list,
           annotations:list,
           boundaries:list, 
          logging_dir:str=None,
-         epochs:int=200, training_steps:int=1000): 
+         epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False, confusion_matrix:bool=False, 
+         crs:str='EPSG:32628'): 
 
     r'''
     
@@ -252,15 +253,60 @@ def train_cnn(ndvi_images:list,
     logging_dir : str
         Passed onto the load_train_test and train_model functions; see load_train_test_split docstring for explanation. 
 
+    use_multiprocessing : bool
+        Higher level access to turning multiprocessing on or not
+
+    confusion_matrix : bool
+        calculate confusion matrix on test set predictions (or not). Note that cm.ravel() for every cm in the returned confusion_matrices will return tn, fp, fn, tp
+
+    crs : str
+        e.g. EPSG:32628; should probably be ready from internal files. 
+
     '''
         
     from cnnheights.utilities import load_train_test, train_model
-    
+    import json 
+    import os 
+    from cnnheights import predict
+    import numpy as np
+
     train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
 
-    model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=logging_dir, NB_EPOCHS=epochs, MAX_TRAIN_STEPS=training_steps)
+    model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=logging_dir, NB_EPOCHS=epochs, MAX_TRAIN_STEPS=training_steps, use_multiprocessing=use_multiprocessing)
 
-    return model, loss_history
+    if confusion_matrix: 
+        from PIL import Image
+        from PIL import ImageFile
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+        with open(os.path.join(logging_dir, 'patches256/frames_list.json')) as json_file:
+            
+            confusion_matrices = []
+            
+            data = json.load(json_file)
+            test_frames = data['testing_frames']
+
+            for test_frame in test_frames:
+                mask = predict(model, ndvi_images[test_frame], pan_images[test_frame], output_dir=logging_dir, crs=crs)
+
+                predictions = mask.flatten()
+                predictions[predictions>1] = 1
+                predictions[predictions<1] = 0
+                predictions = predictions.astype(int)
+
+                image = Image.open(annotations[0])
+                annotation_data = np.asarray(image).flatten()
+                annotation_data[annotation_data>1] = 1
+                annotation_data[annotation_data<1] = 0
+                annotation_data = annotation_data.astype(int)
+
+                cm = confusion_matrix(annotation_data, predictions, normalize='pred')
+                confusion_matrices.append(cm)
+
+        return model, loss_history, confusion_matrices 
+    
+    else: 
+        return model, loss_history
 
 def predict(model, ndvi_image, pan_image, output_dir:str, crs:str, pyproj_datadir:str='/home/fjuhsd/miniconda3/envs/cnnheights310/share/proj'):
     r'''
