@@ -1,2 +1,0 @@
-Here are the p/cython scripts for the abandoned tree heights estimation code.  I do not recommend reading or studying these yet.  There’s a lot of distracting complexity from using 3rd party APIs, data ingest, managing the Python / Cython divide, performance wrangling, etc.  But if you find yourself twiddling your thumbs while waiting for some long running process to finish I won’t forbid it. =)
-
