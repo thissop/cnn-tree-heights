@@ -1,12 +1,26 @@
-def height_from_shadow(shadow:float, time:str, lat:float, lon:float): 
+def height_from_shadow(shadow_length:float, zenith_angle:float):
     r'''
-    _Calculate height of tree from shadow length, time, and location_  
+    _get height from shadow length and zenith angle_
+
+
+    TO DO 
+    -----
+
+    - need to give user information about what way zenith angle should be oriented?
+    
+    '''
+    import numpy as np
+    
+    height = shadow_length*np.tan(np.radians(zenith_angle)) # does this need to get corrected for time zone? 
+     # H = L tan (x), where x is solar elevation angle from ground? 
+    return height 
+
+def zenith_from_location(time:str, lat:float, lon:float): 
+    r'''
+    _get zenith angle for calculations based on time and location_  
 
     Parameters
     ----------      
-
-    shadow : `float`
-        Shadow length in meters
 
     time : `str`
         Time in `"yyyy-mm-dd hh:mm:ss"` format
@@ -18,8 +32,14 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     Returns
     -------
 
-    height : `float`
-        The tree's height in meters. 
+    zenith : `float`
+        Angle of sun's zenith.
+
+
+    TO DO 
+    -----
+    - make it get azimuth to!
+     
     '''
     
     
@@ -29,15 +49,284 @@ def height_from_shadow(shadow:float, time:str, lat:float, lon:float):
     site = Location(latitude=lat, longitude=lon)#, 'Etc/GMT+1') # latitude, longitude, time_zone, altitude, name
     zenith = 180-float(site.get_solarposition(time)['zenith']) # correct? 
 
-    height = shadow/np.tan(np.radians(zenith)) # does this need to get corrected for time zone? 
+    return zenith
 
-    return height
+def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
+    r'''
+    _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
+
+    Arguments 
+    ---------
+
+    annotations_gpkg : `str`
+        path to annotations gpkg file 
+
+    NOTES 
+    -----
+
+    - get lat/long from center ish of the 
+
+    - uses lat/long to get container in cutlines file to reference to get azimuth angle from. 
+    - work with feather files (my preference) for saving these (e.g. save_path='./data.feather')...I love flexibility of .to_file(...)
+
+    TO DO 
+    -----
+    - fix lat long stuff?
+    - d is in meters because it's in the UTM projection? something to mention in paper how we update it for different regions (because inaccurate outside itself)
+
+    ''' 
+
+    import geopandas as gpd 
+    import numpy as np
+    from shapely.geometry import LineString, box
+    from cnnheights.utilities import longest_side
+
+    annotations_gdf = gpd.read_file(annotations_gpkg)
+    annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
+
+    annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
+   
+    centroids = annotations_gdf.centroid    
+
+    cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
+
+    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
+    lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
+    lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
+
+    shadow_lines = lines_gdf.intersection(annotations_gdf, align=False)
+    shadow_lengths = shadow_lines.length
+
+    heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
+    print(cutline_info['SUN_ELEV'])
+
+    bounds = annotations_gdf.bounds
+    dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
+    dy = np.abs(np.abs(bounds['maxy'])-np.abs(bounds['miny']))
+    dxy = np.max(np.array([dx,dy]).T, axis=1)
+    square_bounds = np.array([[minx, miny, minx+diff, miny+diff] for minx, miny, diff in zip(bounds['minx'], bounds['miny'], dxy)])    
+
+    d = {'shadow_geometry':annotations_gdf['geometry'], 
+         'centroids':centroids,
+         'bounds_geometry':[box(*i) for i in square_bounds],
+         'heights':heights, 
+         'line_geometries':shadow_lines, 
+         'lengths':shadow_lengths, 
+         'areas':annotations_gdf['geometry'].area, 
+         'perimeters':annotations_gdf['geometry'].length,
+         'diameters':gpd.GeoSeries(longest_side(annotations_gdf['geometry']))}
+    
+    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
+    shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
+
+    print(shadows_gdf)
+
+    if save_path is not None: 
+        shadows_gdf.to_file(save_path, index=False)
+
+    return shadows_gdf
+
+def longest_side(polygons:list):
+    '''
+    Notes
+    -----
+        - This code is so inefficient...but will work for now. it calculates longest side length \
+        - polygons needs to be list of polygon objects 
+
+    '''
+    import numpy as np
+
+    longest_lengths = []
+    for polygon in polygons: 
+        coords = list([list(i) for i in polygon.exterior.coords])
+        coords = coords+[coords[0]]
+        lengths = []
+        for i in range(len(coords)-1): 
+            left = coords[i]
+            right = coords[i+1]
+            dist = np.sqrt((left[0]-right[0])**2+(left[1]-right[1])**2)
+            lengths.append(dist)
+        
+        longest_length = np.max(lengths)
+        longest_lengths.append(longest_length)
+
+    return longest_lengths
 
 ## PREPROCESS UTILITIES ## 
+
+def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1056,1056), dpi=350):
+    r'''
+
+    TO DO 
+    -----
+
+    Notes
+    -----
+    - note for jesse: opening from this window saves crazy memory. 
+    - FIX THE vector background!!
+
+    '''
+    import rasterio 
+
+    # randomly choose left corner 
+    # eventually, make sure no overlap with other regions 
+
+    import matplotlib.pyplot as plt
+    from rasterio import plot
+    from rasterio.windows import transform
+    import rasterio
+    from shapely.geometry import Polygon
+    import os 
+    import numpy as np
+    import geopandas as gpd 
+    from cnnheights.plotting import save_fig
+
+    dataset = rasterio.open(input_tif) 
+
+    dims = (dataset.width, dataset.height) 
+
+    extant_key = False 
+    if key is not None and os.path.exists(key):
+        extant_key = True 
+
+    overlapping = True 
+    while overlapping: 
+
+        x1, y1 = (np.random.randint(0,dims[0]-sample_dim[0]), np.random.randint(0,dims[1]-sample_dim[1])) ## FIXX!! 
+        x2, y2 = (x1+sample_dim[0], y1+sample_dim[1])
+
+        window = rasterio.windows.Window(x1, y1, sample_dim[0], sample_dim[1]) 
+        img = dataset.read(window=window) 
+        # read both layers with dataset.read(window=window)
+        # read first layer with dataset.read(1, window=window)
+        # read second layer with dataset.read(2, window=window)
+     
+        window_transform = transform(window, dataset.transform) 
+        extent = plot.plotting_extent(img, window_transform) 
+
+        x1 = extent[0]
+        x2 = extent[1]
+        y1 = extent[2]
+        y2 = extent[3]
+
+        extracted_polygon = Polygon(((x1,y1), (x2,y1), (x2, y2), (x1,y2))) 
+
+        if extant_key: 
+            key_gdf = gpd.read_file(key)
+            extracted_geometries = key_gdf['geometry']
+
+            overlapping = extracted_geometries.overlaps(extracted_polygon)[0]
+
+        else: 
+            overlapping = False      
+            
+    centroid = [np.median(extent[0:2]), np.median(extent[3:5])]
+
+    if extant_key: 
+        key_gdf = gpd.read_file(key)
+        d = {'geometry':[extracted_polygon]+key_gdf['geometry'].to_list(),
+             'centroidsx':[centroid[0]]+key_gdf['centroidsx'].to_list(), 
+             'centroidsy':[centroid[1]]+key_gdf['centroidsy'].to_list()}
+
+        key_gdf = gpd.GeoDataFrame(d, crs=crs)
+        key_gdf.to_file(key)
+
+    else: 
+        d = {'geometry':[extracted_polygon], 'centroidsx':[centroid[0]], 'centroidsy':[centroid[1]]}
+        key_gdf = gpd.GeoDataFrame(d, crs=crs) #lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
+        key_gdf.to_file(key)
+
+    if plot_path is not None: 
+        # load img here using rasterio
+        fig, ax = plt.subplots(figsize=(5,5))
+
+        plot.show(img[0], origin='upper', transform=window_transform, 
+                  extent=extent, interpolation=None, ax=ax, vmin=250, vmax=750, cmap='Greys_r')
+        plot.show(img[1], origin='upper', transform=window_transform, 
+                  extent=extent, interpolation=None, cmap='Reds', ax=ax, alpha=0.5)
+        
+        #blended = lighten_only(np.array([img[0].astype(float)]), np.array([img[1].astype(float)]), opacity=0.5)
+        #ax.plot(blended)
+        
+        ax.set_aspect('equal', 'box')
+        
+        save_fig(plot_path, dpi)
+
+    output_dir = os.path.join(output_dir, f'cutout_{counter}')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    output_tif = os.path.join(output_dir, f'cutout_{counter}.tif')
+
+    with rasterio.open(output_tif, 'w',
+            driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
+            dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
+        new_data_set.write(img)#, indexes=2)
+
+    output_ndvi = os.path.join(output_dir, f'raw_ndvi_{counter}.tif')
+    output_pan = os.path.join(output_dir, f'raw_pan_{counter}.tif')
+
+    cutout_raster = rasterio.open(output_tif)
+    width = cutout_raster.width
+    height = cutout_raster.height
+
+    panImg = np.array([cutout_raster.read(1)])
+    ndviImg = np.array([cutout_raster.read(2)])
+
+    with rasterio.open(output_ndvi, 'w',
+        driver='GTiff', width=width, height=height, count=1,
+        dtype=ndviImg.dtype, crs=cutout_raster.crs, transform=window_transform) as ndvi_dataset:
+        ndvi_dataset.write(ndviImg)#, indexes=2)
+
+    with rasterio.open(output_pan, 'w',
+        driver='GTiff', width=width, height=height, count=1,
+        dtype=panImg.dtype, crs=cutout_raster.crs, transform=window_transform) as pan_dataset:
+        pan_dataset.write(ndviImg)#, indexes=2)
+
+    cutout_raster.close()
+
+    vector_rect_path = os.path.join(output_dir, f'vector_rectangle_{counter}.gpkg')
+    vector_rectangle = gpd.GeoDataFrame({'geometry':[extracted_polygon]}, crs=crs)
+    vector_rectangle.to_file(vector_rect_path, driver='GPKG')#, layer='name')
+
+    return key_gdf
+
+## HEIGHTS UTILITIES ##
+def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
+    r'''
+    
+    return cutline information for an observation based on lat/long
+
+    TO DO
+    -----
+
+    - need to improve it so it can work when we use multiple cutouts 
+    - needs to get fixed to use the better lat/long format! 
+    - needs better docstring
+    - make the cutline path better?
+
+    '''
+    import geopandas as gpd
+    import pandas as pd
+
+    # 
+    cutlines_gdf = gpd.read_file(cutlines_shp)
+    cutlines_gdf = cutlines_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
+    df = pd.DataFrame({'North': [north], 'East': [east]}) # LOL. Lat is N/S, Long is W/E
+    point_gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.East, df.North)).set_crs(f'EPSG:{epsg}', allow_override=True)
+
+    polygons_contains = gpd.sjoin(cutlines_gdf, point_gdf, op='contains')
+
+    labels = ['ACQDATE', 'OFF_NADIR', 'SUN_ELEV', 'SUN_AZ', 'SAT_ELEV', 'SAT_AZ']
+    values = [polygons_contains[i].values[0] for i in labels]
+    
+    return dict(list(zip(labels, values)))
 
 def image_normalize(im, axis = (0,1), c = 1e-8):
     r'''Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
+
+## PREPROCESSING UTILITIES ##
 
 def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
     """
@@ -56,7 +345,6 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         os.makedirs(writePath)
     
     for i in range(len(inputImages)): 
-
         input_images = inputImages[i]
         areasWithPolygons=allAreasWithPolygons[i]
         writeCounter=i 
@@ -78,6 +366,10 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         overlapppedAreas.update(imOverlapppedAreasNdvi)
         
         allAreas = set(areasWithPolygons.keys())
+
+        print(overlapppedAreas)
+        print(allAreas)
+
         if allAreas.difference(overlapppedAreas):
             print(f'Warning: Could not find a raw image corresponding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
 
@@ -126,15 +418,20 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
     
     overlapppedAreas = set() # small question, but why set? 
     #print(areasWithPolygons)
-    
+    print('about to look into finding overlap')
     for areaID, areaInfo in areasWithPolygons.items():
         #Convert the polygons in the area in a dataframe and get the bounds of the area. 
         polygonsInAreaDf = gps.GeoDataFrame(areaInfo['polygons'])
         boundariesInAreaDf = gps.GeoDataFrame(areaInfo['boundaryWeight'])    
         bboxArea = box(*areaInfo['bounds'])
         bboxImg = box(*img.bounds)
+
+        print(bboxArea)
+        print(bboxImg)
+
         #Extract the window if area is in the image
         if(bboxArea.intersects(bboxImg)):
+            print('intersects')
             profile = img.profile  
             sm = mask(img, [bboxArea], all_touched=True, crop=True )
             profile['height'] = sm[0].shape[1]
@@ -145,10 +442,13 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
             profile['blockxsize'] = 32
             profile['blockysize'] = 32
             profile['count'] = 1
-            profile['dtype'] = rasterio.float32
+            profile['dtype'] = rasterio.float32 # rasterio.float32 # THIS GOT CHANGED! CHANGE BACK? or unint32?? # maybe fix this
             # write_extracted writes the image, annotation and boundaries and returns the counter of the next file to write. 
             writeCounter = write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imageFilename, annotationFilename, boundaryFilename, bands, writeCounter)
             overlapppedAreas.add(areaID)
+
+        else: 
+            print('not in area??')
 
     return(writeCounter, overlapppedAreas)
 
@@ -157,17 +457,22 @@ def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writ
     Write the part of raw image that overlaps with a training area into a separate image file. 
     Use rowColPolygons to create and write annotation and boundary image from polygons in the training area.
     Note: original name was: writeExtractedImageAndAnnotation
+
+    To Do: remove img from args because it's not used? will need to make chagnes to other files that reference it. 
+
     """
 
     import os 
     import rasterio 
     from cnnheights.utilities import row_col_polygons
-
+    import numpy as np
+    print('about to try to write extracted')
     try:
         for band, imFn in zip(bands, imagesFilename):
             # Rasterio reads file channel first, so the sm[0] has the shape [1 or ch_count, x,y]
-            # If raster has multiple channels, then bands will be [0, 1, ...] otherwise simply [0]
+            # If raster has multiple channels, then bands will be [0, 1, ...] otherwise simply [0] # can i remove this? 
             dt = sm[0][band].astype(profile['dtype'])
+
             if normalize: # Note: If the raster contains None values, then you should normalize it separately by calculating the mean and std without those values.
                 dt = image_normalize(dt, axis=None) #  Normalize the image along the width and height, and since here we only have one channel we pass axis as None # FIX THIS!
             with rasterio.open(os.path.join(writePath, imFn+'_{}.png'.format(writeCounter)), 'w', **profile) as dst:
@@ -290,6 +595,7 @@ def load_train_test(ndvi_images:list,
                     pan_images:list, 
                     annotations:list,
                     boundaries:list,
+                    logging_dir:str=None,
                     normalize:float = 0.4, BATCH_SIZE = 8, patch_size=(256,256,4), 
                     input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3]):
     
@@ -312,6 +618,9 @@ def load_train_test(ndvi_images:list,
 
     boundaries : list
         List of boundary files extracted by previous preprocessing step 
+
+    logging_dir : str
+        the directory all the logging stuff should be saved into. defaults to none, which will make all the directories in directory that the python file that executes this function is run in. 
     
     '''
 
@@ -324,7 +633,11 @@ def load_train_test(ndvi_images:list,
     from cnnheights.original_core.frame_utilities import FrameInfo, split_dataset
     from cnnheights.original_core.dataset_generator import DataGenerator
 
-    patch_dir = './patches{}'.format(patch_size[0])
+    if logging_dir is not None: 
+        patch_dir = os.path.join(logging_dir, f'patches{patch_size[0]}/')
+    else: 
+        patch_dir = './patches{}'.format(patch_size[0])
+    
     frames_json = os.path.join(patch_dir,'frames_list.json')
 
     # Read all images/frames into memory
@@ -354,9 +667,10 @@ def load_train_test(ndvi_images:list,
     return train_generator, val_generator, test_generator
 
 def train_model(train_generator, val_generator, 
-                BATCH_SIZE = 8, NB_EPOCHS = 200, VALID_IMG_COUNT = 200, MAX_TRAIN_STEPS = 1000,
+                BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
-                model_path = './saved_models/UNet/'): 
+                logging_dir:str=None, 
+                model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/'): 
     from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity 
     from cnnheights.original_core.optimizers import adaDelta 
     import time 
@@ -380,9 +694,21 @@ def train_model(train_generator, val_generator,
     chf = input_image_channel + input_label_channel
     chs = reduce(lambda a,b: a+str(b), chf, '')
 
-    if not os.path.exists(model_path):
-        os.makedirs(model_path)
-    model_path = os.path.join(model_path,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
+    if logging_dir is not None: 
+        model_dir= os.path.join(logging_dir, 'saved_models/UNet/')
+        tensorboard_log_dir = os.path.join(logging_dir, 'logs/')
+
+    else: 
+        model_dir = './saved_models/UNet/'
+        tensorboard_log_dir = './logs'
+
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+    if not os.path.exists(tensorboard_log_dir): 
+        os.mkdir(tensorboard_log_dir)
+
+    model_path = os.path.join(model_dir,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
 
     # The weights without the model architecture can also be saved. Just saving the weights is more efficent.
 
@@ -413,14 +739,20 @@ def train_model(train_generator, val_generator,
 
     #early = EarlyStopping(monitor="val_loss", mode="min", verbose=2, patience=15)
 
-    log_dir = os.path.join('./logs','UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
-    tensorboard = TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
+
+
+    tensorboard_log_path = os.path.join(tensorboard_log_dir,'UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
+    tensorboard = TensorBoard(log_dir=tensorboard_log_path, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
 
     callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
 
-    # do training 
+    # do training  
 
     # last line: PROBLEMS START HERE!
+
+    import time 
+
+    s = time.time()
 
     loss_history = [model.fit(train_generator, 
                             steps_per_epoch=MAX_TRAIN_STEPS, 
@@ -429,4 +761,6 @@ def train_model(train_generator, val_generator,
                             validation_steps=VALID_IMG_COUNT,
                             callbacks=callbacks_list, workers=1, use_multiprocessing=True)] # the generator is not very thread safe
 
-    return model, loss_history
+    print('time elapsed', time.time()-s, '(s)')
+
+    return model, loss_history[0].history
