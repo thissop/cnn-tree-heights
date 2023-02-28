@@ -1,6 +1,7 @@
 #NB_EPOCHS, MAX_TRAIN_STEPS
 import os
-from cnnheights import train_cnn, predict
+from cnnheights.training import train_cnn
+from cnnheights.prediction import predict
 import numpy as np
 from PIL import Image
 from PIL import ImageFile

@@ -1,5 +1,5 @@
 import os 
-from cnnheights import preprocess
+from cnnheights.preprocessing import preprocess
 from time import time 
 import numpy as np
 

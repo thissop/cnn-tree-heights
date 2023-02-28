@@ -33,7 +33,8 @@ def run_train(data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-
 
     '''
 
-    from cnnheights import train_cnn, predict
+    from cnnheights.training import train_cnn
+    from cnnheights.prediction import predict
     import os 
     import pandas as pd
     import numpy as np

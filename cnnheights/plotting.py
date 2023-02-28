@@ -272,5 +272,4 @@ def plot_training_diagnostics(loss_history, save_path:str=None):
             plt.close()
     
     return figures
-
-       
+      

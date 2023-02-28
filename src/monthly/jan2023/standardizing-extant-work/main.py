@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 import matplotlib.pyplot as plt 
-from cnnheights.utilities import get_cutline_data
+from cnnheights.preprocessing import get_cutline_data
 import matplotlib.pyplot as plt
 from shapely.geometry import LineString, LinearRing
 import shapely 

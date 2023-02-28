@@ -1,4 +1,4 @@
-from cnnheights import better_preprocess, old_preprocess
+from cnnheights.preprocessing import better_preprocess, preprocess
 import os 
 import numpy as np
 import matplotlib.pyplot as plt 
