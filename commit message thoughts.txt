@@ -1,0 +1,22 @@
+current issue with the better_preprocessing seems to be related to not doing the __main__ check: https://superfastpython.com/multiprocessing-pool-common-errors/#Error_1_Forgetting_main
+
+uhh...my computer was being glitchy and now the cnnheights python library doesn't exist on it anymore after I restarted my computer?...okay it's fixed
+
+importing better_preprocess sets __main__ to 'cnnheights.main'...issue still comes up when I check for that, so imma copy the function into a different file and run it with __main__ check there .
+
+okay...that error is resolved...new error?
+
+    return _ForkingPickler.loads(res)
+AttributeError: Can't get attribute '026203b004b94b6fa26a8a9a5eb9a43c' on <module '__mp_main__' from '../Documents/Work/GitHub/cnn-tree-heights/src/monthly/feb2023/misc/test-preprocess-versions/evaluate-new.py'>
+__mp_main__
+
+okay still getting error...I'm going to bring all cnnheights functions into the evaluate-new file
+
+okay. update. I've moved *all* functions that are used in better_preprocess, as well as all the functions those functions use, into the evaluate-new file, so there are no imports! the only imports are at the very top for external libraries. still getting the below error message: 
+AttributeError: Can't get attribute '39a2eb3b13ee43c39fc6335cceb11fc0' on <module '__mp_main__' from '/Users/yaroslav/Documents/Work/GitHub/cnn-tree-heights/src/monthly/feb2023/misc/test-preprocess-versions/evaluate-new.py'>
+
+https://bugs.python.org/issue25053
+
+here is my current thinking on this: i really want to learn how to use multiprocessing, but i'm not sure if this is the best way to go about it, for two reasons. 
+    1. although it would be ideal and i totally agree with jesse about not giving other people slow code, now that I've run some quantitative tests, it only takes 20.2 seconds for this algo to preprocess 94k annotations (254 1056x1056) files, assuming those files are on average. Hence, not giving slow code. if we ever had to preprocess 10 million annotations, this would only take 10317.307341537959 = 2.9 hours. 
+    2. furthermore, even tho I really want to learn how to use multiprocessing, i feel like this is not the best way to do it, given 1., and given that the code is so complicated and lengthy, that it doesn't lend itself to learning something separate: multiprocessing . 

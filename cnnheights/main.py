@@ -220,7 +220,8 @@ def better_preprocess(input_data_dir:str, output_data_dir:str):
 
 
     #print('checking if name is main')
-    #print(__name__)
+    print(__name__)
+    quit()
     if __name__ != 'cnnheights.main':
         pool = Pool(processes=n_jobs)
         allAreasWithPolygons = pool.map(preprocess_single, area_files)
@@ -304,11 +305,12 @@ def old_preprocess(input_data_dir:str, output_data_dir:str):
     #Parallel(n_jobs=n_jobs)(preprocess_single(index) for index in range(total_jobs))
 
     inputImages = list(zip(raw_ndvi_images,raw_pan_images))
+
+    #print(len(inputImages))
     #print(f'Found a total of {len(input_images)} pair of raw image(s) to process!')
 
     # For each raw satellite image, determine if it overlaps with a training area. 
     # If a overlap if found, then extract + write the overlapping part of the raw image, create + write an image from training polygons and create + write an image from boundary weights in the that overlapping region.
-        
     # Run the main function for extracting part of ndvi and pan images that overlap with training areas
     extract_overlapping(inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, ndviFilename='extracted_ndvi',
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
