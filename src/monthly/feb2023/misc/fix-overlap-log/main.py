@@ -20,7 +20,7 @@ def make_sample():
     gdf = gpd.read_file(key) 
     print(gdf)
 
-make_sample()
+#make_sample()
 
 # check coords: 
 def check_coords(): 
@@ -40,5 +40,5 @@ def check_coords():
         ndvi.close()
         pan.close()
         cutout.close()
-#check_coords()
+check_coords()
 

@@ -4,12 +4,14 @@ matplotlib
 numpy
 pandas
 rasterio
+opencv-python
 scikit-learn
 seaborn
 shapely
 pvlib
 fiona
 pyproj
-cv2
 pillow
-tensorflow
+tensorflow-macos
+tensorflow-metal
+

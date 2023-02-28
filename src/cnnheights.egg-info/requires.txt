@@ -4,7 +4,13 @@ matplotlib
 numpy
 pandas
 rasterio
+opencv-python
 scikit-learn
 seaborn
 shapely
 pvlib
+fiona
+pyproj
+pillow
+tensorflow-macos
+tensorflow-metal

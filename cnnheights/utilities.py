@@ -98,7 +98,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     shadow_lengths = shadow_lines.length
 
     heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
-    print(cutline_info['SUN_ELEV'])
+    #print(cutline_info['SUN_ELEV'])
 
     bounds = annotations_gdf.bounds
     dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
@@ -119,7 +119,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
     shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
 
-    print(shadows_gdf)
+    #print(shadows_gdf)
 
     if save_path is not None: 
         shadows_gdf.to_file(save_path, index=False)
@@ -367,8 +367,8 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         
         allAreas = set(areasWithPolygons.keys())
 
-        print(overlapppedAreas)
-        print(allAreas)
+        ##print(overlapppedAreas)
+        #print(allAreas)
 
         if allAreas.difference(overlapppedAreas):
             print(f'Warning: Could not find a raw image corresponding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
@@ -380,7 +380,7 @@ def divide_training_polygons(trainingPolygon, trainingArea, show_boundaries_duri
     Weight map will be used by the weighted loss during the U-Net training
 
     I.E. Assign annotated ploygons in to the training areas.
-    Note: older name was divide_polygons_in_training_areas
+    Note: older name was divide_polygons_in_training_areas and I think the even older name was dividePolygonsInTrainingAreas
    ''' 
 
     # For efficiency, assigned polygons are removed from the list, we make a copy here. 
@@ -412,26 +412,26 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
 
     from rasterio.mask import mask
     import rasterio 
-    import geopandas as gps
+    import geopandas as gpd
     from shapely.geometry import box
     from cnnheights.utilities import write_extracted
     
     overlapppedAreas = set() # small question, but why set? 
     #print(areasWithPolygons)
-    print('about to look into finding overlap')
+    #print('about to look into finding overlap')
     for areaID, areaInfo in areasWithPolygons.items():
         #Convert the polygons in the area in a dataframe and get the bounds of the area. 
-        polygonsInAreaDf = gps.GeoDataFrame(areaInfo['polygons'])
-        boundariesInAreaDf = gps.GeoDataFrame(areaInfo['boundaryWeight'])    
+        polygonsInAreaDf = gpd.GeoDataFrame(areaInfo['polygons'])
+        boundariesInAreaDf = gpd.GeoDataFrame(areaInfo['boundaryWeight'])    
         bboxArea = box(*areaInfo['bounds'])
         bboxImg = box(*img.bounds)
 
-        print(bboxArea)
-        print(bboxImg)
+        #print(bboxArea)
+        #print(bboxImg)
 
         #Extract the window if area is in the image
         if(bboxArea.intersects(bboxImg)):
-            print('intersects')
+            #print('intersects')
             profile = img.profile  
             sm = mask(img, [bboxArea], all_touched=True, crop=True )
             profile['height'] = sm[0].shape[1]
@@ -466,7 +466,7 @@ def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writ
     import rasterio 
     from cnnheights.utilities import row_col_polygons
     import numpy as np
-    print('about to try to write extracted')
+    #print('about to try to write extracted')
     try:
         for band, imFn in zip(bands, imagesFilename):
             # Rasterio reads file channel first, so the sm[0] has the shape [1 or ch_count, x,y]
@@ -501,14 +501,14 @@ def calculate_boundary_weight(polygonsInArea, scale_polygon = 1.5, output_plot =
     Note: this is the improved version, that scales all the polygons *once* by scaling the gdf by centroid (as opposed to scaling from some cooridinate within the gdf)
     '''
     
-    import geopandas as gps 
+    import geopandas as gpd 
     import matplotlib.pyplot as plt 
 
     # If there are polygons in a area, the boundary polygons return an empty geo dataframe
     if not polygonsInArea:
-        return gps.GeoDataFrame({})
+        return gpd.GeoDataFrame({})
 
-    tempPolygonDf = gps.GeoDataFrame(polygonsInArea)
+    tempPolygonDf = gpd.GeoDataFrame(polygonsInArea)
     scaledPolygonDf = tempPolygonDf.scale(xfact=scale_polygon, yfact=scale_polygon, zfact=scale_polygon, origin='centroid')
     new_c = []
 
@@ -523,10 +523,10 @@ def calculate_boundary_weight(polygonsInArea, scale_polygon = 1.5, output_plot =
             if not left_intersection.is_empty: 
                 new_c.append(left_intersection)
 
-    new_c = gps.GeoSeries(new_c)
-    new_cc = gps.GeoDataFrame({'geometry': new_c})
+    new_c = gpd.GeoSeries(new_c)
+    new_cc = gpd.GeoDataFrame({'geometry': new_c})
     new_cc.columns = ['geometry']
-    bounda = gps.overlay(new_cc, tempPolygonDf, how='difference')
+    bounda = gpd.overlay(new_cc, tempPolygonDf, how='difference')
     
     if output_plot:
         import random 
@@ -670,7 +670,7 @@ def train_model(train_generator, val_generator,
                 BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
                 logging_dir:str=None, 
-                model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/'): 
+                model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/', use_multiprocessing=False): 
     from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity 
     from cnnheights.original_core.optimizers import adaDelta 
     import time 
@@ -759,7 +759,7 @@ def train_model(train_generator, val_generator,
                             epochs=NB_EPOCHS, 
                             validation_data=val_generator,
                             validation_steps=VALID_IMG_COUNT,
-                            callbacks=callbacks_list, workers=1, use_multiprocessing=True)] # the generator is not very thread safe
+                            callbacks=callbacks_list, workers=1, use_multiprocessing=use_multiprocessing)] # the generator is not very thread safe
 
     print('time elapsed', time.time()-s, '(s)')
 
