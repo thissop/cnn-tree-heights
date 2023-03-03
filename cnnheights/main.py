@@ -2,7 +2,7 @@ import pyproj
 
 def main(output_dir:str,
          data_dir:str='data/cnn-input', 
-         epochs:int=1, training_steps:int=5, confusion_matrix:bool=True,
+         epochs:int=50, training_steps:int=1000, confusion_matrix:bool=True,
          pyproj_datadir:str=pyproj.datadir.get_data_dir()):
 
     r'''
@@ -39,6 +39,9 @@ def main(output_dir:str,
     import pandas as pd
     import numpy as np
     import json
+    import warnings                  # ignore annoying warnings
+    warnings.filterwarnings("ignore")
+    import time 
 
     annotations = []
     boundaries = []
@@ -79,7 +82,6 @@ def main(output_dir:str,
     if not os.path.exists(predictions_dir):
         os.mkdir(predictions_dir)
 
-    print('about to run predictions')
     predict(model, ndvi_image=ndvi_images[idx], pan_image=pan_images[idx],
             output_dir=predictions_dir, crs='EPSG:32628',
             pyproj_datadir=pyproj_datadir)
@@ -88,4 +90,4 @@ print(__name__)
 
 if __name__ == '__main__':
     main(data_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/input',
-         output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp')
+         output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights')
