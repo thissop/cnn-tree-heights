@@ -1,13 +1,4 @@
-need to fix import statements
-
-preprocessing, training, utilities? 
-
-yep. *MAJOR* refactoring/reorganization of entire library 
-
-to do: 
-
-[x] replace running training instructions md file with section(s) in README.MD  
-[ ] add annotation version flag to pipeline workflow 
-[ ] test main.py on wh1 
-
-mention lol not 15 minutes to do it right, but going to find things to be productive on, thanks for tile!
+tested/tweaked a couple things testing pipeline fully on wh1...everything good. 
+fixed smth with confusion matrix in pipeline run 
+added auto save of confusion matrix plot to function :)
+added default save of confusion matrix tn, fp, fn, tp values to dataframe in logging if confusion matrix is set to true. 

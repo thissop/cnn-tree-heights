@@ -177,7 +177,7 @@ def train_cnn(ndvi_images:list,
           annotations:list,
           boundaries:list, 
          logging_dir:str=None,
-         epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False, confusion_matrix:bool=False, 
+         epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False, make_confusion_matrix:bool=False, 
          crs:str='EPSG:32628'): 
 
     r'''
@@ -218,12 +218,16 @@ def train_cnn(ndvi_images:list,
     import os 
     from cnnheights.prediction import predict
     import numpy as np
+    from sklearn.metrics import confusion_matrix
+    import matplotlib.pyplot as plt 
+    import seaborn as sns
+    import pandas as pd
 
     train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
 
     model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=logging_dir, NB_EPOCHS=epochs, MAX_TRAIN_STEPS=training_steps, use_multiprocessing=use_multiprocessing)
 
-    if confusion_matrix: 
+    if make_confusion_matrix: 
         from PIL import Image
         from PIL import ImageFile
         ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -235,8 +239,14 @@ def train_cnn(ndvi_images:list,
             data = json.load(json_file)
             test_frames = data['testing_frames']
 
-            for test_frame in test_frames:
-                mask = predict(model, ndvi_images[test_frame], pan_images[test_frame], output_dir=logging_dir, crs=crs)
+            cm_df = pd.DataFrame()
+            tn_vals = []
+            fp_vals = []
+            fn_vals = []
+            tp_vals = []
+
+            for test_frame_idx in test_frames:
+                mask, _ = predict(model, ndvi_images[test_frame_idx], pan_images[test_frame_idx], output_dir=logging_dir, crs=crs)
 
                 predictions = mask.flatten()
                 predictions[predictions>1] = 1
@@ -252,6 +262,39 @@ def train_cnn(ndvi_images:list,
                 cm = confusion_matrix(annotation_data, predictions, normalize='pred')
                 confusion_matrices.append(cm)
 
+                tn, fp, fn, tp = cm.ravel()
+                tn_vals.append(tn)
+                fp_vals.append(fp)
+                fn_vals.append(fn)
+                tp_vals.append(tp)
+
+                plot_dir = os.path.join(logging_dir, 'plots')
+                if not os.path.exists(plot_dir):
+                    os.mkdir(plot_dir)
+                
+                cm_plot_dir = os.path.join(plot_dir, 'confusion-matrices')
+                if not os.path.exists(cm_plot_dir):
+                    os.mkdir(cm_plot_dir)
+
+                fig, ax = plt.subplots()
+
+                cm_labels = ['0', '1']
+                sns.heatmap(cm, annot=True, linewidths=.5, ax=ax, center=0.0, yticklabels=cm_labels, xticklabels=cm_labels, annot_kws={'fontsize':'xx-large'})
+    
+                ax.set(xlabel='True Class', ylabel='Predicted Class')#, xticks=[0,1], yticks=[0,1])
+                #ax.axis('off')
+                #ax.tick_params(top=False, bottom=False, left=False, right=False)
+
+                fig.tight_layout()
+
+                plt.savefig(os.path.join(cm_plot_dir, f'confusion-matrix_{test_frame_idx}.pdf'))
+
+            cm_df['tn'] = tn_vals 
+            cm_df['fp'] = fp_vals
+            cm_df['fn'] = fn_vals 
+            cm_df['tp'] = tp_vals
+
+            cm_df.to_csv(os.path.join(cm_plot_dir, 'cm-results.csv'), index=False)
         return model, loss_history, confusion_matrices 
     
     else: 

@@ -186,3 +186,5 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str, pyproj_datadi
 
     predicted_fp = os.path.join(output_dir, f'predicted_polygons.shp')
     writeMaskToDisk(detected_mask=detected_mask, detected_meta=detected_meta, wp=predicted_fp, crs=crs)
+
+    return detected_mask, detected_meta
