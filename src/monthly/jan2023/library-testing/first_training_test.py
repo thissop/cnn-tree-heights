@@ -1,5 +1,5 @@
 import os
-from cnnheights import train_cnn
+from cnnheights.training import train_cnn
 import numpy as np
 
 ndvi_images = []

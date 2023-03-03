@@ -1,4 +1,4 @@
-from cnnheights.utilities import sample_background
+from cnnheights.preprocessing import sample_background
 import os 
 import geopandas as gpd 
 import rasterio 

@@ -1,5 +1,5 @@
 def make_cutout(): 
-    from cnnheights.utilities import sample_background
+    from cnnheights.preprocessing import sample_background
     import os 
 
     input_tif = '/Users/yaroslav/Documents/Work/NASA/data/jesse/big mosaic/big mosaic.tif'
