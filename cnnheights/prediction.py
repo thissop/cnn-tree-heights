@@ -1,9 +1,15 @@
-def predict(model, ndvi_image, pan_image, output_dir:str, crs:str, pyproj_datadir:str='/home/fjuhsd/miniconda3/envs/cnnheights310/share/proj'):
+def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     r'''
+    
+    Arguments
+    ---------
+
+    model : 
+        - Either a "live" model (i.e. extant in the code already), or a string path to a .h5 saved version of a model (that this function will load with all the custom stuff)
     
     NOTES
     -----
-    
+
     TO DO
     -----
 
@@ -16,11 +22,18 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str, pyproj_datadi
     from cnnheights.preprocessing import image_normalize
     from itertools import product
 
-    import pyproj
-    pyproj.datadir.set_data_dir(pyproj_datadir)
+    #import pyproj
+    #pyproj.datadir.set_data_dir(pyproj_datadir)
 
     ndvi_image = rasterio.open(ndvi_image)
     pan_image = rasterio.open(pan_image)
+
+    if type(model) is str: 
+        from cnnheights.original_core.losses import tversky, dice_coef, dice_loss, specificity, sensitivity
+        from tensorflow import keras 
+        model = keras.models.load_model(model, custom_objects={ 'tversky':tversky,
+                                                                'dice_coef':dice_coef, 'dice_loss':dice_loss,
+                                                                'specificity':specificity, 'sensitivity':sensitivity})
 
     def addTOResult(res, prediction, row, col, he, wi, operator = 'MAX'):
         currValue = res[row:row+he, col:col+wi]

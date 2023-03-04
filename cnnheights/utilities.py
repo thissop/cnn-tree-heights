@@ -83,8 +83,8 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     from cnnheights.preprocessing import get_cutline_data
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
-    annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
-
+    annotations_gdf['geometry'] = annotations_gdf.buffer(0)
+    annotations_gdf = annotations_gdf[annotations_gdf.geom_type == 'Polygon']
     annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
    
     centroids = annotations_gdf.centroid    
@@ -107,7 +107,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     dxy = np.max(np.array([dx,dy]).T, axis=1)
     square_bounds = np.array([[minx, miny, minx+diff, miny+diff] for minx, miny, diff in zip(bounds['minx'], bounds['miny'], dxy)])    
 
-    d = {'shadow_geometry':annotations_gdf['geometry'], 
+    d = {'geometry':annotations_gdf['geometry'], 
          'centroids':centroids,
          'bounds_geometry':[box(*i) for i in square_bounds],
          'heights':heights, 
@@ -115,10 +115,11 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
          'lengths':shadow_lengths, 
          'areas':annotations_gdf['geometry'].area, 
          'perimeters':annotations_gdf['geometry'].length,
-         'diameters':gpd.GeoSeries(longest_side(annotations_gdf['geometry']))}
+         'diameters':gpd.GeoSeries(longest_side(annotations_gdf['geometry'])),
+        }
     
     shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
-    shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
+    shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['geometry'] != None])
 
     #print(shadows_gdf)
 

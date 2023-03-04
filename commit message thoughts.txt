@@ -1,1 +1,27 @@
-added routine capability to run main.py as background process so I can run in on wh1 remotely and close connection
+nothing like 80s music and code on a Saturday morning 
+
+Epoch 2: val_loss did not improve from 0.12460 (continued, so I'm going to play with the first saved model)
+
+having issues loading saved model
+
+ValueError: Unknown loss function: tversky. Please ensure this object is passed to the `custom_objects` argument. See https://www.tensorflow.org/guide/keras/save_and_serialize#registering_the_custom_object for details.
+    - ahh. I was using the custom_objects={} in load, but I shouldn't load tversky as 'loss' key...need to load it as 'tversky' key (same for others)
+    - fixed. 
+
+I love the linux command scp...let's me send files to wh1 so easy (because I can only interact with this computer via ssh in command line)...time to send cutlines file over 
+
+
+problem: 
+shapely.errors.TopologicalError: The operation 'GEOSIntersection_r' could not be performed. Likely cause is invalidity of the geometry <shapely.geometry.polygon.Polygon object at 0x7efe78eb7e50>
+
+having lots of errors with loading from predicted (saved) annotations...
+
+TypeError: Cannot interpret '<geopandas.array.GeometryDtype object at 0x7fc7d0d9bc10>' as a data type
+
+to do: 
+[ ] add option to pass string to predict function, so it automatically handles the loading thing I had to do today.
+[x] remove pyproj from predict
+[ ] run annotation_shadows func on predictions? 
+[ ] summary files so I don't have to pass args annoyingly to functions like shadow_annotaions every time? 
+    - maybe auto as part of sample_cutout? I think this step might already be in it? 
+[ ] replace annoying shp files with gpkg files (so only one file to deal with)
