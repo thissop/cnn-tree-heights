@@ -14,4 +14,4 @@ pyproj
 pillow
 #tensorflow-macos
 #tensorflow-metal
-
+pyarrow 

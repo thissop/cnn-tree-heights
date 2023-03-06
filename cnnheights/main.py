@@ -86,8 +86,6 @@ def main(output_dir:str,
             output_dir=predictions_dir, crs='EPSG:32628',
             pyproj_datadir=pyproj_datadir)
 
-print(__name__)
-
 if __name__ == '__main__':
     main(data_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/input',
          output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights')

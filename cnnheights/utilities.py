@@ -81,6 +81,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     from shapely.geometry import LineString, box
     from cnnheights.utilities import longest_side
     from cnnheights.preprocessing import get_cutline_data
+    import os 
 
     annotations_gdf = gpd.read_file(annotations_gpkg)
     annotations_gdf['geometry'] = annotations_gdf.buffer(0)
@@ -109,7 +110,7 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
 
     d = {'geometry':annotations_gdf['geometry'], 
          'centroids':centroids,
-         'bounds_geometry':[box(*i) for i in square_bounds],
+         'bounds_geometry':gpd.GeoSeries([box(*i) for i in square_bounds]),
          'heights':heights, 
          'line_geometries':shadow_lines, 
          'lengths':shadow_lengths, 
@@ -124,7 +125,10 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     #print(shadows_gdf)
 
     if save_path is not None: 
-        shadows_gdf.to_file(save_path, index=False)
+        save_path_list = save_path.split('/')
+        save_dir = '/'.join(save_path_list[:-1])
+        file_name = save_path_list[-1].split('.')[0]+'.geoparquet'
+        shadows_gdf.to_parquet(os.path.join(save_dir, file_name))
 
     return shadows_gdf
 
