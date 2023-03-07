@@ -51,15 +51,15 @@ def zenith_from_location(time:str, lat:float, lon:float):
 
     return zenith
 
-def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
+def shadows_from_annotations(annotations_file, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
     r'''
     _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
 
     Arguments 
     ---------
 
-    annotations_gpkg : `str`
-        path to annotations gpkg file 
+    annotations_file : `str`
+        path to annotations file...ideally geoparquet
 
     NOTES 
     -----
@@ -83,7 +83,13 @@ def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, ea
     from cnnheights.preprocessing import get_cutline_data
     import os 
 
-    annotations_gdf = gpd.read_file(annotations_gpkg)
+    
+    if 'parquet' in annotations_file: 
+        annotations_gdf = gpd.read_parquet(annotations_file)
+
+    else: 
+        annotations_gdf = gpd.read_file(annotations_file)
+
     annotations_gdf['geometry'] = annotations_gdf.buffer(0)
     annotations_gdf = annotations_gdf[annotations_gdf.geom_type == 'Polygon']
     annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)

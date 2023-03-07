@@ -1,31 +1,16 @@
-nothing like 80s music and code on a Saturday morning (this commit message started saturday so check that it didn't overlap LOL)
+plotted and confirmed...for some reason model is predicting the negative? 
 
-there was no improvement after first epoch .... 
+inverted the detected mask during the write? 
 
-Epoch 2: val_loss did not improve from 0.12460 (continued, so I'm going to play with the first saved model)
+detected_mask[detected_mask<th]=1
+detected_mask[detected_mask>=th]=0 # THIS HAS BEEN INVERTED! MIGHT NEED TO FIX LATER!! 
 
-having issues loading saved model
+that is not a good solution. a. doesn't fix root problem...at least we know now problem starts after preprocessing (based on qgis screenshot of png annotations) and before writing to disk
 
-ValueError: Unknown loss function: tversky. Please ensure this object is passed to the `custom_objects` argument. See https://www.tensorflow.org/guide/keras/save_and_serialize#registering_the_custom_object for details.
-    - ahh. I was using the custom_objects={} in load, but I shouldn't load tversky as 'loss' key...need to load it as 'tversky' key (same for others)
-    - fixed. 
+as I'm debugging, switching things to geoparquet 
 
-I love the linux command scp...let's me send files to wh1 so easy (because I can only interact with this computer via ssh in command line)...time to send cutlines file over 
+problem doesn't happen in writeMaskToDisk before mask_to_polygon
 
-problem: 
-shapely.errors.TopologicalError: The operation 'GEOSIntersection_r' could not be performed. Likely cause is invalidity of the geometry <shapely.geometry.polygon.Polygon object at 0x7efe78eb7e50>
+problem traces earliest back to detect_tree...could be in that or before 
 
-having lots of errors with loading from predicted (saved) annotations...
-
-TypeError: Cannot interpret '<geopandas.array.GeometryDtype object at 0x7fc7d0d9bc10>' as a data type
-
-to do: 
-[x] add option to pass string to predict function, so it automatically handles the loading thing I had to do today.
-[x] remove pyproj from predict
-[ ] run annotation_shadows func on predictions? 
-[ ] summary files so I don't have to pass args annoyingly to functions like shadow_annotaions every time? 
-    - maybe auto as part of sample_cutout? I think this step might already be in it? 
-[ ] replace annoying shp files with gpkg files (so only one file to deal with)
-[ ] get rid of values in gdf that you can just calculate again (e.g. centroids of polygons...just calculate these again, because it's bad to store multiple geometry columns in a gdf)...this will require refactoring a couple utilities functions :D 
-[ ] convert to geoparquet? let's you do multiple geometry columns!! --> tell Jesse! https://getindata.com/blog/introducing-geoparquet-data-format/
-    - okay. i can confirm it saves and loads multiple geometry types...now maybe restrict amount of 
+maybe it's in addToResult?

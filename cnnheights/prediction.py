@@ -59,8 +59,17 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         for i in range(len(batch_pos)):
             (col, row, wi, he) = batch_pos[i]
             p = np.squeeze(prediction[i], axis = -1)
+            print(p[0])
+            print(np.max(p))
             # Instead of replacing the current values with new values, use the user specified operator (MIN,MAX,REPLACE)
             mask = addTOResult(mask, p, row, col, he, wi, operator)
+
+            th = 0.5
+            temp_mask = mask
+            temp_mask[temp_mask>=th] = 1
+            temp_mask[temp_mask<th] = 0
+            print('temp_mask in predict_using_model:', temp_mask[0])
+        
         return mask
 
     def detect_tree(ndvi_img, pan_img, width=256, height=256, stride = 128, normalize=True):
@@ -107,6 +116,12 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         return (mask, meta)
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
+
+    th = 0.5
+    temp_mask = detected_mask
+    temp_mask[temp_mask>=th] = 1
+    temp_mask[temp_mask<th] = 0
+    print('temp_mask in predict right after detect_tree:', temp_mask[0])
 
     import matplotlib.pyplot as plt  # plotting tools
     from matplotlib.patches import Polygon
@@ -177,7 +192,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         if 'float' in str(detected_meta['dtype']) and 'int' in write_as_type:
             print(f'Converting prediction from {detected_meta["dtype"]} to {write_as_type}, using threshold of {th}')
             detected_mask[detected_mask<th]=0
-            detected_mask[detected_mask>=th]=1
+            detected_mask[detected_mask>=th]=1 
             detected_mask = detected_mask.astype(write_as_type)
             detected_meta['dtype'] =  write_as_type
 
@@ -186,7 +201,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         d = {'geometry':[i for i in res if i.type == 'Polygon']}
         gdf = gpd.GeoDataFrame(d, crs=crs)
         #gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
-        gdf.to_file(predicted_fp, driver='ESRI Shapefile')#, schema=schema)
+        gdf.to_parquet(predicted_fp)#, schema=schema)
 
         '''
         with fiona.open(wp, 'w', crs=crs, driver='ESRI Shapefile', schema=schema) as sink: 
@@ -197,7 +212,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
                     print('An exception occurred in createShapefileObject; Polygon must have more than 2 points')
         '''
 
-    predicted_fp = os.path.join(output_dir, f'predicted_polygons.shp')
+    predicted_fp = os.path.join(output_dir, f'predicted_polygons.geoparquet')
     writeMaskToDisk(detected_mask=detected_mask, detected_meta=detected_meta, wp=predicted_fp, crs=crs)
 
     return detected_mask, detected_meta
