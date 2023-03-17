@@ -23,6 +23,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     from rasterio import windows
     from cnnheights.preprocessing import image_normalize
     from itertools import product
+    import os
 
     #import pyproj
     #pyproj.datadir.set_data_dir(pyproj_datadir)
@@ -113,24 +114,6 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
     
-    from cnnheights.utilities import invert_mask
-    detected_mask = invert_mask(detected_mask)
-
-    import matplotlib.pyplot as plt  # plotting tools
-    import os 
-    import geopandas as gpd
-
-    fig, axs = plt.subplots(1,2, figsize=(6,3)) 
-
-    axs[0].hist(detected_mask.flatten())
-    axs[0].set(xlabel='Prediction Value', ylabel='Frequency', yscale='log')
-
-    im = axs[1].imshow(detected_mask)
-    plt.colorbar(im, shrink=0.7)
-
-    plt.tight_layout()
-    plt.savefig(f'/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/detected-mask/img_detected_mask-[INVERTED][basic-sklearn-inversion].png')
-
     def mask_to_polygons(maskF, transform):
         import cv2
         from shapely.geometry import Polygon
@@ -147,7 +130,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
             return (tp)
 
         # first, find contours with cv2: it's much faster than shapely
-        th = 0.09
+        th = 0.5
         mask = maskF.copy()
         mask[mask < th] = 0
         mask[mask >= th] = 1
