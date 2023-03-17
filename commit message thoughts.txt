@@ -1,5 +1,11 @@
-I can't see why the issue would be in addToResult, so I think it's some step in preprocssing with the model. 
+approach for today: invert at end by saving min and max, then turning prediction matrix A' = 1/A, then renormalizing A' between those boundaries. 
+I'm going to make the change after the detect trees step of predict() because it's the least involved aspect of the code to change. 
 
-okay so confirmed problem happens after the selection step of load_train_test
+X_std = (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0))
+X_scaled = X_std * (max - min) + min
 
-wait...how can it be predicting wrong if it's predicting the correct ish ... wait idk if that's right...this train of thought is not good haha. 
+Okay based on initial investigation this does not seem like a good approach...it reverses the distribution which is a bad idea. 
+
+maybe my norm func is wrong? 
+
+maybe 2d norm is bad? 

@@ -112,21 +112,24 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         return (mask, meta)
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
+    
+    from cnnheights.utilities import invert_mask
+    detected_mask = invert_mask(detected_mask)
 
     import matplotlib.pyplot as plt  # plotting tools
-    from matplotlib.patches import Polygon
     import os 
-    from shapely.geometry import mapping, shape
-    #import fiona 
     import geopandas as gpd
 
+    fig, axs = plt.subplots(1,2, figsize=(6,3)) 
 
-    fig, ax = plt.subplots() 
-    im = ax.imshow(detected_mask)
-    plt.colorbar(im)
+    axs[0].hist(detected_mask.flatten())
+    axs[0].set(xlabel='Prediction Value', ylabel='Frequency', yscale='log')
 
-    plt.savefig(f'/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/detected-mask/img_detected_mask.png')
+    im = axs[1].imshow(detected_mask)
+    plt.colorbar(im, shrink=0.7)
 
+    plt.tight_layout()
+    plt.savefig(f'/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/detected-mask/img_detected_mask-[INVERTED][basic-sklearn-inversion].png')
 
     def mask_to_polygons(maskF, transform):
         import cv2

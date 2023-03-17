@@ -133,6 +133,7 @@ class DataGenerator():
 
                 ann_joint = np.concatenate((ann,weights), axis=-1)
 
+                '''
                 print(X.shape, ann_joint.shape)
                 import matplotlib.pyplot as plt 
 
@@ -154,7 +155,6 @@ class DataGenerator():
                 axs[1,0].set(ylabel='ann_joint')
 
                 plt.savefig('/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/single/ann_joint_X.png')
-
-                quit()
-
+                '''
+                
                 yield X, ann_joint

@@ -84,7 +84,7 @@ def main(output_dir:str,
 
     predict(model, ndvi_image=ndvi_images[idx], pan_image=pan_images[idx],
             output_dir=predictions_dir, crs='EPSG:32628')
-
+    
 if __name__ == '__main__':
     main(data_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/input',
          output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights')
