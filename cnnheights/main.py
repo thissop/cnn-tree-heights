@@ -2,7 +2,7 @@ import pyproj
 
 def main(output_dir:str,
          data_dir:str='data/cnn-input', 
-         epochs:int=50, training_steps:int=1000, confusion_matrix:bool=True,
+         epochs:int=1, training_steps:int=1, confusion_matrix:bool=True,
          pyproj_datadir:str=pyproj.datadir.get_data_dir()):
 
     r'''
@@ -83,8 +83,7 @@ def main(output_dir:str,
         os.mkdir(predictions_dir)
 
     predict(model, ndvi_image=ndvi_images[idx], pan_image=pan_images[idx],
-            output_dir=predictions_dir, crs='EPSG:32628',
-            pyproj_datadir=pyproj_datadir)
+            output_dir=predictions_dir, crs='EPSG:32628')
 
 if __name__ == '__main__':
     main(data_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/input',

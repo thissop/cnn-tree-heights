@@ -1,0 +1,6 @@
+img_detected_mask.png
+    - it is inverted here, so we know it's not how they're being written to disk. 
+
+predict-using-model-predictions: 
+    - conclusion: the stacking max-min thing isn't the culprit. the predictions themselves are actually inverted. 
+    - maybe the problem has to do with the stacking getting reversed at some point? 

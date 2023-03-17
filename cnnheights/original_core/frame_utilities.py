@@ -96,8 +96,8 @@ def image_normalize(im, axis = (0,1), c = 1e-8):
     '''
     Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
+    # @THADDAEUS I don't think it's here because annotations aren't getting normalized 
    
- 
 # Each area (ndvi, pan, annotation, weight) is represented as an Frame
 class FrameInfo:
     """ Defines a frame, includes its constituent images, annotation and weights (for weighted loss).

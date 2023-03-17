@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt 
+
 def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     r'''
     
@@ -59,17 +61,11 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         for i in range(len(batch_pos)):
             (col, row, wi, he) = batch_pos[i]
             p = np.squeeze(prediction[i], axis = -1)
-            print(p[0])
-            print(np.max(p))
+         
             # Instead of replacing the current values with new values, use the user specified operator (MIN,MAX,REPLACE)
+            
             mask = addTOResult(mask, p, row, col, he, wi, operator)
 
-            th = 0.5
-            temp_mask = mask
-            temp_mask[temp_mask>=th] = 1
-            temp_mask[temp_mask<th] = 0
-            print('temp_mask in predict_using_model:', temp_mask[0])
-        
         return mask
 
     def detect_tree(ndvi_img, pan_img, width=256, height=256, stride = 128, normalize=True):
@@ -89,7 +85,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         batch_pos = [ ]
         for col_off, row_off in offsets:
             window = windows.Window(col_off=col_off, row_off=row_off, width=width, height=height).intersection(big_window)
-            transform = windows.transform(window, ndvi_img.transform)
+            transform = windows.transform(window, ndvi_img.transform) # delete? 
             patch = np.zeros((height, width, 2)) #Add zero padding in case of corner images
             ndvi_sm = ndvi_img.read(window=window)
             pan_sm = pan_img.read(window=window)
@@ -117,18 +113,20 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
 
-    th = 0.5
-    temp_mask = detected_mask
-    temp_mask[temp_mask>=th] = 1
-    temp_mask[temp_mask<th] = 0
-    print('temp_mask in predict right after detect_tree:', temp_mask[0])
-
     import matplotlib.pyplot as plt  # plotting tools
     from matplotlib.patches import Polygon
     import os 
     from shapely.geometry import mapping, shape
     #import fiona 
     import geopandas as gpd
+
+
+    fig, ax = plt.subplots() 
+    im = ax.imshow(detected_mask)
+    plt.colorbar(im)
+
+    plt.savefig(f'/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/detected-mask/img_detected_mask.png')
+
 
     def mask_to_polygons(maskF, transform):
         import cv2
@@ -182,7 +180,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
                 except:
                     pass
     #                 print("An exception occurred in createShapefileObject; Polygon must have more than 2 points")
-        print(len(all_polygons))
+
         return all_polygons
 
     schema = {'geometry': 'Polygon', 'properties': {'id': 'str', 'canopy': 'float:15.2',}}

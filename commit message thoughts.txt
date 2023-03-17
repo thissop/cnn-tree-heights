@@ -1,16 +1,5 @@
-plotted and confirmed...for some reason model is predicting the negative? 
+I can't see why the issue would be in addToResult, so I think it's some step in preprocssing with the model. 
 
-inverted the detected mask during the write? 
+okay so confirmed problem happens after the selection step of load_train_test
 
-detected_mask[detected_mask<th]=1
-detected_mask[detected_mask>=th]=0 # THIS HAS BEEN INVERTED! MIGHT NEED TO FIX LATER!! 
-
-that is not a good solution. a. doesn't fix root problem...at least we know now problem starts after preprocessing (based on qgis screenshot of png annotations) and before writing to disk
-
-as I'm debugging, switching things to geoparquet 
-
-problem doesn't happen in writeMaskToDisk before mask_to_polygon
-
-problem traces earliest back to detect_tree...could be in that or before 
-
-maybe it's in addToResult?
+wait...how can it be predicting wrong if it's predicting the correct ish ... wait idk if that's right...this train of thought is not good haha. 

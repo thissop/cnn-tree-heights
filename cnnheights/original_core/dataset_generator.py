@@ -132,4 +132,29 @@ class DataGenerator():
                 weights[weights<0.5] = 1
 
                 ann_joint = np.concatenate((ann,weights), axis=-1)
+
+                print(X.shape, ann_joint.shape)
+                import matplotlib.pyplot as plt 
+
+                fig, axs = plt.subplots(2,4, figsize=(6,6))
+
+                print(X[0][0])
+
+                axs[0,0].imshow(X[0][0])
+                axs[0,1].imshow(X[0][1])
+                axs[0,2].imshow(X[1][0])
+                axs[0,3].imshow(X[1][1])
+
+                axs[0,0].set(ylabel='X')
+
+                axs[1,0].imshow(ann_joint[0][0])
+                axs[1,1].imshow(ann_joint[0][1])
+                axs[1,2].imshow(ann_joint[1][0])
+                axs[1,3].imshow(ann_joint[1][1])
+                axs[1,0].set(ylabel='ann_joint')
+
+                plt.savefig('/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/single/ann_joint_X.png')
+
+                quit()
+
                 yield X, ann_joint

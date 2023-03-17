@@ -50,6 +50,7 @@ def load_train_test(ndvi_images:list,
     # Read all images/frames into memory
     frames = []
 
+    # problem is not in this for loop
     for i in range(len(ndvi_images)):
         ndvi_img = rasterio.open(ndvi_images[i])
         pan_img = rasterio.open(pan_images[i])
@@ -59,11 +60,16 @@ def load_train_test(ndvi_images:list,
         comb_img = np.transpose(comb_img, axes=(1,2,0)) #Channel at the end
         annotation_im = Image.open(annotations[i])
         annotation = np.array(annotation_im)
+        
+        
+
         weight_im = Image.open(boundaries[i])
         weight = np.array(weight_im)
         f = FrameInfo(comb_img, annotation, weight)
         frames.append(f)
     
+    # @THADDAEUS maybe problem is with generator? --> I don't think so...most likely prediction tbh??
+
     training_frames, validation_frames, testing_frames  = split_dataset(frames, frames_json, patch_dir)
 
     annotation_channels = input_label_channel + input_weight_channel
@@ -73,6 +79,7 @@ def load_train_test(ndvi_images:list,
 
     return train_generator, val_generator, test_generator
 
+# not in train_model
 def train_model(train_generator, val_generator, 
                 BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000, it seems like 26.14 for five steps in one epoch. 
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
@@ -146,8 +153,6 @@ def train_model(train_generator, val_generator,
 
     #early = EarlyStopping(monitor="val_loss", mode="min", verbose=2, patience=15)
 
-
-
     tensorboard_log_path = os.path.join(tensorboard_log_dir,'UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
     tensorboard = TensorBoard(log_dir=tensorboard_log_path, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
 
@@ -172,6 +177,7 @@ def train_model(train_generator, val_generator,
 
     return model, loss_history[0].history
 
+# not in train_cnn (unless the function call to generators causes the problem)
 def train_cnn(ndvi_images:list,
           pan_images:list, 
           annotations:list,
@@ -223,15 +229,16 @@ def train_cnn(ndvi_images:list,
     import seaborn as sns
     import pandas as pd
 
+    # @THADDAEUS maybe the problem is here? 
     train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
 
     model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=logging_dir, NB_EPOCHS=epochs, MAX_TRAIN_STEPS=training_steps, use_multiprocessing=use_multiprocessing)
 
     if make_confusion_matrix: 
-        from PIL import Image
+        from PIL import Image 
         from PIL import ImageFile
         ImageFile.LOAD_TRUNCATED_IMAGES = True
-
+        
         with open(os.path.join(logging_dir, 'patches256/frames_list.json')) as json_file:
             
             confusion_matrices = []

@@ -439,7 +439,7 @@ def better_preprocess(input_data_dir:str, output_data_dir:str):
 
     #print('checking if name is main')
     print(__name__)
-    quit()
+    
     if __name__ != 'cnnheights.main':
         pool = Pool(processes=n_jobs)
         allAreasWithPolygons = pool.map(preprocess_single, area_files)
@@ -452,7 +452,6 @@ def better_preprocess(input_data_dir:str, output_data_dir:str):
         partial_func = partial(extract_overlapping, inputImages=inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, bands=[0])
         pool.map(partial_func, range(total_jobs))
 
-        quit()
 
 # CURRENT LOW LEVEL FUNCTIONS USED BY HIGH LEVEL PREPROCESS # 
 
