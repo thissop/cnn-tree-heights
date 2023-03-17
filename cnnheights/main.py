@@ -85,6 +85,17 @@ def main(output_dir:str,
     predict(model, ndvi_image=ndvi_images[idx], pan_image=pan_images[idx],
             output_dir=predictions_dir, crs='EPSG:32628')
     
+    import geopandas as gpd 
+    gdf = gpd.read_parquet('/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights/predicted_polygons.geoparquet')
+    print(gdf)
+    print(len(gdf.index))
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    gdf.plot(ax=ax)
+    plt.tight_layout()
+    plt.savefig('/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/predicted-polygons/plot[th=0.09].pdf')
+
 if __name__ == '__main__':
     main(data_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/input',
          output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights')
