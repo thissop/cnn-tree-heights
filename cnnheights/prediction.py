@@ -23,7 +23,8 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     from rasterio import windows
     from cnnheights.preprocessing import image_normalize
     from itertools import product
-    import os
+    import os 
+    import geopandas as gpd
 
     #import pyproj
     #pyproj.datadir.set_data_dir(pyproj_datadir)
@@ -114,6 +115,9 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
     
+    from cnnheights.utilities import invert_mask
+    detected_mask = invert_mask(detected_mask)
+
     def mask_to_polygons(maskF, transform):
         import cv2
         from shapely.geometry import Polygon
