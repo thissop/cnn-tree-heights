@@ -127,7 +127,7 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
     with rasterio.open(output_pan, 'w',
         driver='GTiff', width=width, height=height, count=1,
         dtype=panImg.dtype, crs=cutout_raster.crs, transform=window_transform) as pan_dataset:
-        pan_dataset.write(ndviImg)#, indexes=2)
+        pan_dataset.write(panImg)#, indexes=2)
 
     cutout_raster.close()
 
@@ -216,6 +216,9 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     extract_overlapping(inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, ndviFilename='extracted_ndvi',
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
                                                 boundaryFilename='extracted_boundary', bands=[0])
+
+
+
 
 # DEVELOPMENT HIGH LEVEL PREPROCESS FUNCTIONS #
 
@@ -451,7 +454,6 @@ def better_preprocess(input_data_dir:str, output_data_dir:str):
         pool = Pool(processes=n_jobs)
         partial_func = partial(extract_overlapping, inputImages=inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, bands=[0])
         pool.map(partial_func, range(total_jobs))
-
 
 # CURRENT LOW LEVEL FUNCTIONS USED BY HIGH LEVEL PREPROCESS # 
 

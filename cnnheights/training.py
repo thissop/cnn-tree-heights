@@ -61,11 +61,9 @@ def load_train_test(ndvi_images:list,
         annotation_im = Image.open(annotations[i])
         annotation = np.array(annotation_im)
         
-        
-
         weight_im = Image.open(boundaries[i])
         weight = np.array(weight_im)
-        f = FrameInfo(comb_img, annotation, weight)
+        f = FrameInfo(img=comb_img, annotations=annotation, weight=weight) # problem is not with how this is ordered
         frames.append(f)
     
     # @THADDAEUS maybe problem is with generator? --> I don't think so...most likely prediction tbh??
@@ -73,7 +71,7 @@ def load_train_test(ndvi_images:list,
     training_frames, validation_frames, testing_frames  = split_dataset(frames, frames_json, patch_dir)
 
     annotation_channels = input_label_channel + input_weight_channel
-    train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = 'iaa').random_generator(BATCH_SIZE, normalize = normalize)
+    train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = None).random_generator(BATCH_SIZE, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things? 
     val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(BATCH_SIZE, normalize = normalize)
     test_generator = DataGenerator(input_image_channel, patch_size, testing_frames, frames, annotation_channels, augmenter= None).random_generator(BATCH_SIZE, normalize = normalize)
 
@@ -253,7 +251,7 @@ def train_cnn(ndvi_images:list,
             tp_vals = []
 
             for test_frame_idx in test_frames:
-                mask, _ = predict(model, ndvi_images[test_frame_idx], pan_images[test_frame_idx], output_dir=logging_dir, crs=crs)
+                mask, _ = predict(model=model, ndvi_image=ndvi_images[test_frame_idx], pan_image=pan_images[test_frame_idx], output_dir=logging_dir, crs=crs)
 
                 predictions = mask.flatten()
                 predictions[predictions>1] = 1
