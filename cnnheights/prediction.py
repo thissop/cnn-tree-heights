@@ -114,9 +114,6 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         return (mask, meta)
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
-    
-    from cnnheights.utilities import invert_mask
-    detected_mask = invert_mask(detected_mask)
 
     def mask_to_polygons(maskF, transform):
         import cv2
