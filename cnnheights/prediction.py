@@ -131,7 +131,7 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
             return (tp)
 
         # first, find contours with cv2: it's much faster than shapely
-        th = 0.09
+        th = 0.5
         mask = maskF.copy()
         mask[mask < th] = 0
         mask[mask >= th] = 1
