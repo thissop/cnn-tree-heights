@@ -1,3 +1,11 @@
+input data was wrong but not the problem???
+
+conclusion: 
+
+ugh. I just tested the training/prediction pipeline on the data for tree crowns only from the summer, it was still predicting just the messed up inverted version. I think this means theres a deep rooted problem in the pipeline. I'm going to ask Jesse if there is something else productive I can work on for now. 
+
+Log: 
+
 could ndvi/pan/boundaries/annotations be getting switched around somewhere? 
 one thing I'm doing is going through and defining all arguments in function calls explicitly in case the ^^ is an issue. 
 no more augmentation on training data for now. 
@@ -7,3 +15,9 @@ data isn't the problem right??? check after next check.
 okay....data might be the problem? ndvi and pan look identical?? ... yep confirming this is an issue UGGHHHH why did I make this mistake...
 
 I think I just saw a spot in the preprocessing where it was writing the ndviImg data to the pan img file?? I thought we fixed that previously??
+
+need to re-run preprocess based on pan/ndvi fix
+
+actually the way the preprocess sampling works it would be really annoying to fix the current data, so I'm going to just going to test on summer data that just predicts the tree locations..
+
+I'm going to re-run sample and check that it works, then move debugging code to personal nasa repo
