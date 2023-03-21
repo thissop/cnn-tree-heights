@@ -127,11 +127,11 @@ class DataGenerator():
                 # y would have two channels, i.e. annotations and weights.
                 ann =  y[...,[0]]
                 #boundaries have a weight of 10 other parts of the image has weight 1
-                weights = y[...,[1]]
+                weights = y[...,[1]] # maybe issue is here? 
                 weights[weights>=0.5] = 10
                 weights[weights<0.5] = 1
 
-                ann_joint = np.concatenate((ann,weights), axis=-1)
+                ann_joint = np.concatenate((ann, weights), axis=-1)
 
                 '''
                 print(X.shape, ann_joint.shape)
