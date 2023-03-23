@@ -1,5 +1,8 @@
 import matplotlib.pyplot as plt 
 
+#def basic_debug_predict(): 
+
+
 def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     r'''
     

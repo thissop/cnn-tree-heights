@@ -1,9 +1,6 @@
-import pyproj 
-
 def main(output_dir:str,
-         data_dir:str='data/cnn-input', 
-         epochs:int=1, training_steps:int=1, confusion_matrix:bool=True,
-         pyproj_datadir:str=pyproj.datadir.get_data_dir()):
+         data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/cnn-input', 
+         epochs:int=5, training_steps:int=5, confusion_matrix:bool=False):
 
     r'''
     
@@ -34,42 +31,41 @@ def main(output_dir:str,
     '''
 
     from cnnheights.training import train_cnn
-    from cnnheights.prediction import predict
     import os 
     import pandas as pd
     import numpy as np
+    import matplotlib.pyplot as plt 
     import json
+    from cnnheights.prediction import predict
+    from cnnheights.debug_utils import display_images
+    import geopandas as gpd
     import warnings                  # ignore annoying warnings
     warnings.filterwarnings("ignore")
     import time 
 
-    annotations = []
-    boundaries = []
-    ndvi_images = []
-    pan_images = []
-
-    for file in np.sort(os.listdir(data_dir)):
-        full_path = os.path.join(data_dir, file)
-        if '.png' in file: 
-            if 'annotation' in file: 
-                annotations.append(full_path) 
-    
-            elif 'boundary' in file: 
-                boundaries.append(full_path) 
-
-            elif 'extracted_ndvi' in file: 
-                ndvi_images.append(full_path) 
-
-            elif 'extracted_pan' in file: 
-                pan_images.append(full_path) 
+    annotations = [os.path.join(data_dir, f'extracted_annotation_{i}.png') for i in range(10)]
+    boundaries = [i.replace('annotation', 'boundary') for i in annotations]
+    ndvi_images = [i.replace('annotation', 'ndvi') for i in annotations]
+    pan_images = [i.replace('annotation', 'pan') for i in annotations]
 
     print('about to run train_cnn')
-    model, hist, confusion_matrices = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=output_dir, epochs=epochs, training_steps=training_steps, 
+
+    # why is it only getting four? 
+
+    model, hist, test_generator = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=output_dir, epochs=epochs, training_steps=training_steps, 
                             make_confusion_matrix=confusion_matrix)
+
+    test_images, real_label = next(test_generator)
+    #5 images per row: pan, ndvi, label, weight, prediction
+    prediction = model.predict(test_images, steps=1)
+    prediction[prediction>0.5]=1
+    prediction[prediction<=0.5]=0
+    display_images(np.concatenate((test_images, prediction), axis = -1), 'debugging-take-2/output/plots/predictions_display_image.pdf')
 
     hist_df = pd.DataFrame().from_dict(hist)
     hist_df.to_csv(os.path.join(output_dir, 'history-df.csv'), index=False)
 
+    ## MY PREDICT METHOD ##
     test_frame = None 
     with open(os.path.join(output_dir, 'patches256/frames_list.json')) as json_file:
         data = json.load(json_file)
@@ -84,7 +80,15 @@ def main(output_dir:str,
 
     predict(model, ndvi_image=ndvi_images[idx], pan_image=pan_images[idx],
             output_dir=predictions_dir, crs='EPSG:32628')
-    
+
+    import geopandas as gpd
+    import matplotlib.pyplot as plt 
+
+    fig, ax = plt.subplots()
+    gdf = gpd.read_parquet('debugging-take-2/output/pipeline-output/predictions/predicted_polygons.geoparquet')
+    print(gdf)
+    gdf.plot(ax=ax)
+    plt.savefig('debugging-take-2/output/plots/final-predictions.pdf')
+
 if __name__ == '__main__':
-    main(data_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/input',
-         output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/other/cnn-heights')
+    main(output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-2/output/pipeline-output')

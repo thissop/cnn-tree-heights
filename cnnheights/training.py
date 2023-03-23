@@ -71,15 +71,28 @@ def load_train_test(ndvi_images:list,
     training_frames, validation_frames, testing_frames  = split_dataset(frames, frames_json, patch_dir)
 
     annotation_channels = input_label_channel + input_weight_channel
-    train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = None).random_generator(BATCH_SIZE, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things? 
+    train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = 'iaa').random_generator(BATCH_SIZE, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things? 
     val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(BATCH_SIZE, normalize = normalize)
     test_generator = DataGenerator(input_image_channel, patch_size, testing_frames, frames, annotation_channels, augmenter= None).random_generator(BATCH_SIZE, normalize = normalize)
+
+    '''
+    # do the for _ in range() here to check if issue is before or after
+    from cnnheights.debug_utils import display_images
+    train_images, real_label = next(train_generator)
+    ann = real_label[:,:,:,0]
+    wei = real_label[:,:,:,1]
+    #overlay of annotation with boundary to check the accuracy
+    #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight
+    overlay = ann + wei
+    overlay = overlay[:,:,:,np.newaxis]
+    display_images(np.concatenate((train_images,real_label), axis = -1))
+    '''
 
     return train_generator, val_generator, test_generator
 
 # not in train_model
 def train_model(train_generator, val_generator, 
-                BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 1, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000, it seems like 26.14 for five steps in one epoch. 
+                BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 200, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000, it seems like 26.14 for five steps in one epoch. 
                 input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
                 logging_dir:str=None, 
                 model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/', use_multiprocessing=False): 
@@ -88,7 +101,7 @@ def train_model(train_generator, val_generator,
     import time 
     from functools import reduce 
     from cnnheights.original_core.UNet import UNet 
-    from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, ReduceLROnPlateau, TensorBoard
+    from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
     import os 
 
     OPTIMIZER = adaDelta
@@ -103,7 +116,7 @@ def train_model(train_generator, val_generator,
     # This path is for storing a model after training.
 
     timestr = time.strftime("%Y%m%d-%H%M")
-    chf = input_image_channel + input_label_channel
+    chf = [0,1,2]
     chs = reduce(lambda a,b: a+str(b), chf, '')
 
     if logging_dir is not None: 
@@ -134,6 +147,7 @@ def train_model(train_generator, val_generator,
     print('\n')
     print([BATCH_SIZE, *input_shape])
     print('\n')
+
     model = UNet([BATCH_SIZE, *input_shape], input_label_channel) # *config.input_shape had asterisk originally?
     model.compile(optimizer=OPTIMIZER, loss=LOSS, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
 
@@ -142,15 +156,6 @@ def train_model(train_generator, val_generator,
     checkpoint = ModelCheckpoint(model_path, monitor='val_loss', verbose=1, 
                                 save_best_only=True, mode='min', save_weights_only = False)
 
-    #reduceonplatea; It can be useful when using adam as optimizer
-    #Reduce learning rate when a metric has stopped improving (after some patience,reduce by a factor of 0.33, new_lr = lr * factor).
-    #cooldown: number of epochs to wait before resuming normal operation after lr has been reduced.
-    reduceLROnPlat = ReduceLROnPlateau(monitor='val_loss', factor=0.33,
-                                    patience=4, verbose=1, mode='min',
-                                    min_delta=0.0001, cooldown=4, min_lr=1e-16)
-
-    #early = EarlyStopping(monitor="val_loss", mode="min", verbose=2, patience=15)
-
     tensorboard_log_path = os.path.join(tensorboard_log_dir,'UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
     tensorboard = TensorBoard(log_dir=tensorboard_log_path, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
 
@@ -158,20 +163,12 @@ def train_model(train_generator, val_generator,
 
     # do training  
 
-    # last line: PROBLEMS START HERE!
-
-    import time 
-
-    s = time.time()
-
     loss_history = [model.fit(train_generator, 
                             steps_per_epoch=MAX_TRAIN_STEPS, 
                             epochs=NB_EPOCHS, 
                             validation_data=val_generator,
                             validation_steps=VALID_IMG_COUNT,
-                            callbacks=callbacks_list, workers=1, use_multiprocessing=use_multiprocessing)] # the generator is not very thread safe
-
-    #print('time elapsed', time.time()-s, '(s)')
+                            callbacks=callbacks_list, use_multiprocessing=use_multiprocessing)] # the generator is not very thread safe
 
     return model, loss_history[0].history
 
@@ -303,4 +300,4 @@ def train_cnn(ndvi_images:list,
         return model, loss_history, confusion_matrices 
     
     else: 
-        return model, loss_history
+        return model, loss_history, test_generator
