@@ -1,0 +1,13 @@
+there was a difference in the values passed to the adaDelta optimzer between mine and ankits...
+
+combining train_cnn with train_model for simplicity 
+
+deleting make_confusion_matrix for now
+
+wait...it's actually working! I set epochs to 50 and it did it perfectly! accuracy is increasing every training step, both the display image as well as my prediction predictions are working...this is amazing! I am so happy!
+
+let's fix some training data from my stuff tonight and see if it works on that. This is great news! 
+
+yep! it's up to 80% acc in 100 training steps one epoch! *and* it's high accuracy on non-inverted predictions!
+
+going to fix data now. 

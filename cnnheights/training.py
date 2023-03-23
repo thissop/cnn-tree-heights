@@ -1,10 +1,4 @@
-def load_train_test(ndvi_images:list,
-                    pan_images:list, 
-                    annotations:list,
-                    boundaries:list,
-                    logging_dir:str=None,
-                    normalize:float = 0.4, BATCH_SIZE = 8, patch_size=(256,256,4), 
-                    input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3]):
+def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, logging_dir:str=None):
     
     r'''
     
@@ -39,6 +33,14 @@ def load_train_test(ndvi_images:list,
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     from cnnheights.original_core.frame_utilities import FrameInfo, split_dataset
     from cnnheights.original_core.dataset_generator import DataGenerator
+
+    normalize = 0.4
+    BATCH_SIZE = 8
+    patch_size=(256,256,4)
+    input_shape = (256,256,2)
+    input_image_channel = [0,1]
+    input_label_channel = [2]
+    input_weight_channel = [3]
 
     if logging_dir is not None: 
         patch_dir = os.path.join(logging_dir, f'patches{patch_size[0]}/')
@@ -90,96 +92,11 @@ def load_train_test(ndvi_images:list,
 
     return train_generator, val_generator, test_generator
 
-# not in train_model
-def train_model(train_generator, val_generator, 
-                BATCH_SIZE = 8, NB_EPOCHS = 21, VALID_IMG_COUNT = 200, MAX_TRAIN_STEPS = 500, # NB_EPOCHS=200, MAX_TRAIN_STEPS=1000, it seems like 26.14 for five steps in one epoch. 
-                input_shape = (256,256,2), input_image_channel = [0,1], input_label_channel = [2], input_weight_channel = [3], 
-                logging_dir:str=None, 
-                model_path = './src/monthly/jan2023/library-testing/cnn-training-output/saved_models/UNet/', use_multiprocessing=False): 
-    from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity 
-    from cnnheights.original_core.optimizers import adaDelta 
-    import time 
-    from functools import reduce 
-    from cnnheights.original_core.UNet import UNet 
-    from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
-    import os 
-
-    OPTIMIZER = adaDelta
-    LOSS = tversky 
-
-    # Only for the name of the model in the very end
-    OPTIMIZER_NAME = 'AdaDelta'
-    LOSS_NAME = 'weightmap_tversky'
-
-    # Declare the path to the final model
-    # If you want to retrain an exising model then change the cell where model is declared. 
-    # This path is for storing a model after training.
-
-    timestr = time.strftime("%Y%m%d-%H%M")
-    chf = [0,1,2]
-    chs = reduce(lambda a,b: a+str(b), chf, '')
-
-    if logging_dir is not None: 
-        model_dir= os.path.join(logging_dir, 'saved_models/UNet/')
-        tensorboard_log_dir = os.path.join(logging_dir, 'logs/')
-
-    else: 
-        model_dir = './saved_models/UNet/'
-        tensorboard_log_dir = './logs'
-
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
-
-    if not os.path.exists(tensorboard_log_dir): 
-        os.mkdir(tensorboard_log_dir)
-
-    model_path = os.path.join(model_dir,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
-
-    # The weights without the model architecture can also be saved. Just saving the weights is more efficent.
-
-    # weight_path="./saved_weights/UNet/{}/".format(timestr)
-    # if not os.path.exists(weight_path):
-    #     os.makedirs(weight_path)
-    # weight_path=weight_path + "{}_weights.best.hdf5".format('UNet_model')
-    # print(weight_path)
-
-    # Define the model and compile it
-    print('\n')
-    print([BATCH_SIZE, *input_shape])
-    print('\n')
-
-    model = UNet([BATCH_SIZE, *input_shape], input_label_channel) # *config.input_shape had asterisk originally?
-    model.compile(optimizer=OPTIMIZER, loss=LOSS, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
-
-    # Define callbacks for the early stopping of training, LearningRateScheduler and model checkpointing
-
-    checkpoint = ModelCheckpoint(model_path, monitor='val_loss', verbose=1, 
-                                save_best_only=True, mode='min', save_weights_only = False)
-
-    tensorboard_log_path = os.path.join(tensorboard_log_dir,'UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME, chs, input_shape[0]))
-    tensorboard = TensorBoard(log_dir=tensorboard_log_path, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
-
-    callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
-
-    # do training  
-
-    loss_history = [model.fit(train_generator, 
-                            steps_per_epoch=MAX_TRAIN_STEPS, 
-                            epochs=NB_EPOCHS, 
-                            validation_data=val_generator,
-                            validation_steps=VALID_IMG_COUNT,
-                            callbacks=callbacks_list, use_multiprocessing=use_multiprocessing)] # the generator is not very thread safe
-
-    return model, loss_history[0].history
-
 # not in train_cnn (unless the function call to generators causes the problem)
-def train_cnn(ndvi_images:list,
-          pan_images:list, 
-          annotations:list,
-          boundaries:list, 
-         logging_dir:str=None,
-         epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False, make_confusion_matrix:bool=False, 
-         crs:str='EPSG:32628'): 
+def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, 
+              epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False, 
+              logging_dir:str=None,
+              crs:str='EPSG:32628'): 
 
     r'''
     
@@ -214,90 +131,93 @@ def train_cnn(ndvi_images:list,
 
     '''
         
-    from cnnheights.training import load_train_test, train_model
-    import json 
+    from cnnheights.training import load_train_test
     import os 
-    from cnnheights.prediction import predict
     import numpy as np
-    from sklearn.metrics import confusion_matrix
     import matplotlib.pyplot as plt 
     import seaborn as sns
     import pandas as pd
+    from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity 
+    from cnnheights.original_core.optimizers import adaDelta 
+    import time 
+    from functools import reduce 
+    from cnnheights.original_core.UNet import UNet 
+    from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 
-    # @THADDAEUS maybe the problem is here? 
     train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
 
-    model, loss_history = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=logging_dir, NB_EPOCHS=epochs, MAX_TRAIN_STEPS=training_steps, use_multiprocessing=use_multiprocessing)
+    BATCH_SIZE = 8
+    VALID_IMG_COUNT = 200 # used in validation
+    input_shape = (256,256,2)
+    input_image_channel = [0,1]
+    input_label_channel = [2]
+    input_weight_channel = [3]
 
-    if make_confusion_matrix: 
-        from PIL import Image 
-        from PIL import ImageFile
-        ImageFile.LOAD_TRUNCATED_IMAGES = True
-        
-        with open(os.path.join(logging_dir, 'patches256/frames_list.json')) as json_file:
-            
-            confusion_matrices = []
-            
-            data = json.load(json_file)
-            test_frames = data['testing_frames']
+    OPTIMIZER = adaDelta
+    LOSS = tversky 
 
-            cm_df = pd.DataFrame()
-            tn_vals = []
-            fp_vals = []
-            fn_vals = []
-            tp_vals = []
+    # Only for the name of the model in the very end
+    OPTIMIZER_NAME = 'AdaDelta'
+    LOSS_NAME = 'weightmap_tversky'
 
-            for test_frame_idx in test_frames:
-                mask, _ = predict(model=model, ndvi_image=ndvi_images[test_frame_idx], pan_image=pan_images[test_frame_idx], output_dir=logging_dir, crs=crs)
+    # Declare the path to the final model
+    # If you want to retrain an exising model then change the cell where model is declared. 
+    # This path is for storing a model after training.
 
-                predictions = mask.flatten()
-                predictions[predictions>1] = 1
-                predictions[predictions<1] = 0
-                predictions = predictions.astype(int)
+    timestr = time.strftime("%Y%m%d-%H%M")
+    chf = input_image_channel + input_label_channel
+    chs = reduce(lambda a,b: a+str(b), chf, '')
 
-                image = Image.open(annotations[0])
-                annotation_data = np.asarray(image).flatten()
-                annotation_data[annotation_data>1] = 1
-                annotation_data[annotation_data<1] = 0
-                annotation_data = annotation_data.astype(int)
+    if logging_dir is not None: 
+        model_dir= os.path.join(logging_dir, 'saved_models/UNet/')
+        tensorboard_log_dir = os.path.join(logging_dir, 'logs/')
 
-                cm = confusion_matrix(annotation_data, predictions, normalize='pred')
-                confusion_matrices.append(cm)
-
-                tn, fp, fn, tp = cm.ravel()
-                tn_vals.append(tn)
-                fp_vals.append(fp)
-                fn_vals.append(fn)
-                tp_vals.append(tp)
-
-                plot_dir = os.path.join(logging_dir, 'plots')
-                if not os.path.exists(plot_dir):
-                    os.mkdir(plot_dir)
-                
-                cm_plot_dir = os.path.join(plot_dir, 'confusion-matrices')
-                if not os.path.exists(cm_plot_dir):
-                    os.mkdir(cm_plot_dir)
-
-                fig, ax = plt.subplots()
-
-                cm_labels = ['0', '1']
-                sns.heatmap(cm, annot=True, linewidths=.5, ax=ax, center=0.0, yticklabels=cm_labels, xticklabels=cm_labels, annot_kws={'fontsize':'xx-large'})
-    
-                ax.set(xlabel='True Class', ylabel='Predicted Class')#, xticks=[0,1], yticks=[0,1])
-                #ax.axis('off')
-                #ax.tick_params(top=False, bottom=False, left=False, right=False)
-
-                fig.tight_layout()
-
-                plt.savefig(os.path.join(cm_plot_dir, f'confusion-matrix_{test_frame_idx}.pdf'))
-
-            cm_df['tn'] = tn_vals 
-            cm_df['fp'] = fp_vals
-            cm_df['fn'] = fn_vals 
-            cm_df['tp'] = tp_vals
-
-            cm_df.to_csv(os.path.join(cm_plot_dir, 'cm-results.csv'), index=False)
-        return model, loss_history, confusion_matrices 
-    
     else: 
-        return model, loss_history, test_generator
+        model_dir = './saved_models/UNet/'
+        tensorboard_log_dir = './logs'
+
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+    if not os.path.exists(tensorboard_log_dir): 
+        os.mkdir(tensorboard_log_dir)
+
+    model_path = os.path.join(model_dir,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
+
+    # The weights without the model architecture can also be saved. Just saving the weights is more efficent.
+
+    # weight_path="./saved_weights/UNet/{}/".format(timestr)
+    # if not os.path.exists(weight_path):
+    #     os.makedirs(weight_path)
+    # weight_path=weight_path + "{}_weights.best.hdf5".format('UNet_model')
+    # print(weight_path)
+
+    # Define the model and compile it
+    print('\n')
+    print([BATCH_SIZE, *input_shape])
+    print('\n')
+
+    model = UNet([BATCH_SIZE, *input_shape],input_label_channel)
+    model.compile(optimizer=OPTIMIZER, loss=LOSS, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
+
+    # Define callbacks for the early stopping of training, LearningRateScheduler and model checkpointing
+
+    checkpoint = ModelCheckpoint(model_path, monitor='val_loss', verbose=1, 
+                             save_best_only=True, mode='min', save_weights_only = False)
+
+
+    log_dir = os.path.join('./logs','UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs, input_shape[0]))
+    tensorboard = TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
+
+    callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
+
+    # do training  
+
+    loss_history = [model.fit(train_generator, 
+                            steps_per_epoch=training_steps, 
+                            epochs=epochs, 
+                            validation_data=val_generator,
+                            validation_steps=VALID_IMG_COUNT,
+                            callbacks=callbacks_list, use_multiprocessing=use_multiprocessing)] # the generator is not very thread safe
+
+    return model, loss_history[0].history, test_generator

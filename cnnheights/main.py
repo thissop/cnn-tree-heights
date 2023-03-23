@@ -1,6 +1,6 @@
 def main(output_dir:str,
          data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/cnn-input', 
-         epochs:int=5, training_steps:int=5, confusion_matrix:bool=False):
+         epochs:int=1, training_steps:int=100):
 
     r'''
     
@@ -52,8 +52,7 @@ def main(output_dir:str,
 
     # why is it only getting four? 
 
-    model, hist, test_generator = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=output_dir, epochs=epochs, training_steps=training_steps, 
-                            make_confusion_matrix=confusion_matrix)
+    model, hist, test_generator = train_cnn(ndvi_images, pan_images, annotations, boundaries, logging_dir=output_dir, epochs=epochs, training_steps=training_steps)
 
     test_images, real_label = next(test_generator)
     #5 images per row: pan, ndvi, label, weight, prediction
