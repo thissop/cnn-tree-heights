@@ -79,7 +79,7 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
 
     '''
     # do the for _ in range() here to check if issue is before or after
-    from cnnheights.debug_utils import display_images
+    from cnnheights.original_core.visualize import display_images
     train_images, real_label = next(train_generator)
     ann = real_label[:,:,:,0]
     wei = real_label[:,:,:,1]
@@ -212,12 +212,16 @@ def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:li
     callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
 
     # do training  
-
+    start = time.time()
     loss_history = [model.fit(train_generator, 
                             steps_per_epoch=training_steps, 
                             epochs=epochs, 
                             validation_data=val_generator,
                             validation_steps=VALID_IMG_COUNT,
                             callbacks=callbacks_list, use_multiprocessing=use_multiprocessing)] # the generator is not very thread safe
+
+    elapsed = time.time()-start
+
+    print(f'Elapsed: {elapsed}; Average: {round(elapsed/100, 3)}')
 
     return model, loss_history[0].history, test_generator

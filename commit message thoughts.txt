@@ -1,13 +1,11 @@
-there was a difference in the values passed to the adaDelta optimzer between mine and ankits...
+need to run for like hundreds of training iterations tonight...
 
-combining train_cnn with train_model for simplicity 
+email jesse tonight with initial results on shadows with mention of time per training step. 
 
-deleting make_confusion_matrix for now
+need to merge things into main tomorow, work on the config file. 
 
-wait...it's actually working! I set epochs to 50 and it did it perfectly! accuracy is increasing every training step, both the display image as well as my prediction predictions are working...this is amazing! I am so happy!
+then compare with jesse's debug stuff. 
 
-let's fix some training data from my stuff tonight and see if it works on that. This is great news! 
+Elapsed: 426.7281918525696; Average: 4.267
 
-yep! it's up to 80% acc in 100 training steps one epoch! *and* it's high accuracy on non-inverted predictions!
-
-going to fix data now. 
+need to look into data tom, see if it's data issue...cuz nn is working otherwise!

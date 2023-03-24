@@ -1,5 +1,5 @@
 def main(output_dir:str,
-         data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/cnn-input', 
+         data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/first-shadows-dataset', 
          epochs:int=1, training_steps:int=100):
 
     r'''
@@ -23,7 +23,7 @@ def main(output_dir:str,
          pyproj_datadir = pyproj.datadir.get_data_dir()
          ```    
 
-    Notes 
+    Notes  
     -----
 
         - Multiprocessing is on. 
@@ -37,13 +37,13 @@ def main(output_dir:str,
     import matplotlib.pyplot as plt 
     import json
     from cnnheights.prediction import predict
-    from cnnheights.debug_utils import display_images
+    from cnnheights.original_core.visualize import display_images
     import geopandas as gpd
     import warnings                  # ignore annoying warnings
     warnings.filterwarnings("ignore")
     import time 
 
-    annotations = [os.path.join(data_dir, f'extracted_annotation_{i}.png') for i in range(10)]
+    annotations = [os.path.join(data_dir, f'extracted_annotation_{i}.png') for i in range(4)]
     boundaries = [i.replace('annotation', 'boundary') for i in annotations]
     ndvi_images = [i.replace('annotation', 'ndvi') for i in annotations]
     pan_images = [i.replace('annotation', 'pan') for i in annotations]
@@ -59,7 +59,7 @@ def main(output_dir:str,
     prediction = model.predict(test_images, steps=1)
     prediction[prediction>0.5]=1
     prediction[prediction<=0.5]=0
-    display_images(np.concatenate((test_images, prediction), axis = -1), 'debugging-take-2/output/plots/predictions_display_image.pdf')
+    display_images(np.concatenate((test_images, prediction), axis = -1), 'debugging-take-2/output/plots/predictions_display_image_[shadows-dataset].pdf')
 
     hist_df = pd.DataFrame().from_dict(hist)
     hist_df.to_csv(os.path.join(output_dir, 'history-df.csv'), index=False)
@@ -87,7 +87,7 @@ def main(output_dir:str,
     gdf = gpd.read_parquet('debugging-take-2/output/pipeline-output/predictions/predicted_polygons.geoparquet')
     print(gdf)
     gdf.plot(ax=ax)
-    plt.savefig('debugging-take-2/output/plots/final-predictions.pdf')
+    plt.savefig('debugging-take-2/output/plots/final-predictions_[shadows-dataset].pdf')
 
 if __name__ == '__main__':
     main(output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-2/output/pipeline-output')
