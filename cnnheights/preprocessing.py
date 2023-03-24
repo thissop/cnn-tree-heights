@@ -217,7 +217,6 @@ def preprocess(input_data_dir:str, output_data_dir:str):
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
                                                 boundaryFilename='extracted_boundary', bands=[0])
 
-
 # DEVELOPMENT HIGH LEVEL PREPROCESS FUNCTIONS #
 
 def combined_preprocess(input_data_dir:str, output_data_dir:str): 
