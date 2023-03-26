@@ -7,3 +7,4 @@ cnnheights/__pycache__
 cnnheights/original_core/__pycache__
 *.pyc
 data/input
+data/*
