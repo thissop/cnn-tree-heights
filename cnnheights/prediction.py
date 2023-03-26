@@ -1,9 +1,4 @@
-import matplotlib.pyplot as plt 
-
-#def basic_debug_predict(): 
-
-
-def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
+def predict(model, ndvi_fp, pan_fp, output_dir:str):
     r'''
     
     Arguments
@@ -32,8 +27,11 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
     #import pyproj
     #pyproj.datadir.set_data_dir(pyproj_datadir)
 
-    ndvi_image = rasterio.open(ndvi_image)
-    pan_image = rasterio.open(pan_image)
+    ndvi_image = rasterio.open(ndvi_fp)
+    pan_image = rasterio.open(pan_fp)
+
+    assert ndvi_image.crs == pan_image.crs
+    crs = ndvi_image.crs 
 
     if type(model) is str: 
         from cnnheights.original_core.losses import tversky, dice_coef, dice_loss, specificity, sensitivity
@@ -87,10 +85,9 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
 
         # mask = mask -1 # Note: The initial mask is initialized with -1 instead of zero to handle the MIN case (see addToResult)
         batch = []
-        batch_pos = [ ]
+        batch_pos = []
         for col_off, row_off in offsets:
             window = windows.Window(col_off=col_off, row_off=row_off, width=width, height=height).intersection(big_window)
-            transform = windows.transform(window, ndvi_img.transform) # delete? 
             patch = np.zeros((height, width, 2)) #Add zero padding in case of corner images
             ndvi_sm = ndvi_img.read(window=window)
             pan_sm = pan_img.read(window=window)
@@ -117,6 +114,10 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         return (mask, meta)
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
+    segmentation_fn = pan_fp.split("\\")[-1].split('.')[0]
+    with rasterio.open(output_dir + segmentation_fn + "_segmented.tif", 'w', **ndvi_image.profile) as segmented_ds:
+        segmented_ds.write(detected_mask, 1)
+    #return # Jesse had this as a random return statement...I think this was a mistake? 
 
     def mask_to_polygons(maskF, transform):
         import cv2
@@ -169,11 +170,9 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
                     all_polygons.append(poly)
                 except:
                     pass
-    #                 print("An exception occurred in createShapefileObject; Polygon must have more than 2 points")
+                    # print("An exception occurred in createShapefileObject; Polygon must have more than 2 points")
 
         return all_polygons
-
-    schema = {'geometry': 'Polygon', 'properties': {'id': 'str', 'canopy': 'float:15.2',}}
 
     def writeMaskToDisk(detected_mask, detected_meta, wp, crs, write_as_type = 'uint8', th = 0.5):
         # Convert to correct required before writing
@@ -190,15 +189,6 @@ def predict(model, ndvi_image, pan_image, output_dir:str, crs:str):
         gdf = gpd.GeoDataFrame(d, crs=crs)
         #gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
         gdf.to_parquet(predicted_fp)#, schema=schema)
-
-        '''
-        with fiona.open(wp, 'w', crs=crs, driver='ESRI Shapefile', schema=schema) as sink: 
-            for idx, mp in enumerate(res):
-                try: 
-                    sink.write({'geometry':mapping(mp), 'properties':{'id':str(idx), 'canopy':mp.area}})
-                except: 
-                    print('An exception occurred in createShapefileObject; Polygon must have more than 2 points')
-        '''
 
     predicted_fp = os.path.join(output_dir, f'predicted_polygons.geoparquet')
     writeMaskToDisk(detected_mask=detected_mask, detected_meta=detected_meta, wp=predicted_fp, crs=crs)
