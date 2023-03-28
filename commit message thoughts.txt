@@ -1,0 +1,7 @@
+okay...seems like theres an issue with sample cutout...ugh. will fix. (too big)
+
+it turns out that the issue is a little more nuanced than I thought..when I run sample_background on the old tile, I get correct sized and split for everything with no overlap...is the resolution of the new image a lot less? that changes things big time in how I create samples. 
+
+for some reason preprocess on first mosaic file cutouts is now making really weird horizontal sliver instead of what it's supposed to...loooking into this. 
+
+none of these issues existed before (except for the stuff with the foggy mosaic file)...I wonder if this has to do with all the weird git stuff between versions on my computer versus wh1. also could be result of me maybe messing up incorporation of Jesse's debugging edits. 

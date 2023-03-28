@@ -49,7 +49,7 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
      
         window_transform = transform(window, dataset.transform) 
         extent = plot.plotting_extent(img, window_transform) 
-
+        
         x1 = extent[0]
         x2 = extent[1]
         y1 = extent[2]
@@ -61,7 +61,7 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
             key_gdf = gpd.read_file(key)
             extracted_geometries = key_gdf['geometry']
 
-            overlapping = extracted_geometries.overlaps(extracted_polygon)[0]
+            overlapping = extracted_geometries.overlaps(extracted_polygon)[0] # this probably needs to get fixed
 
         else: 
             overlapping = False      

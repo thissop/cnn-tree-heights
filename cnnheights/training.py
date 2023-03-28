@@ -69,6 +69,17 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = 'iaa').random_generator(batch_size, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things?
     val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
     test_generator = DataGenerator(input_image_channel, patch_size, testing_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
+    
+    # do the for _ in range() here to check if issue is before or after	
+    from cnnheights.original_core.visualize import display_images	
+    train_images, real_label = next(train_generator)	
+    ann = real_label[:,:,:,0]	
+    wei = real_label[:,:,:,1]	
+    #overlay of annotation with boundary to check the accuracy	
+    #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight	
+    overlay = ann + wei	
+    overlay = overlay[:,:,:,np.newaxis]	
+    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path='/Users/yaroslav/Documents/Work/GitHub/nasa-personal/src/monthly/mar2023/wk5/fixing-nn/post-fixing-pan-data')	
 
     return train_generator, val_generator, test_generator
 
