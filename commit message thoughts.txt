@@ -1,7 +1,5 @@
-okay...seems like theres an issue with sample cutout...ugh. will fix. (too big)
+my new method slows me down because I have to use ndvi to get middle of tree (so the annotation starts at the crown center), and then go to ndvi to make sure it's tight...but higher quality annotations? 
 
-it turns out that the issue is a little more nuanced than I thought..when I run sample_background on the old tile, I get correct sized and split for everything with no overlap...is the resolution of the new image a lot less? that changes things big time in how I create samples. 
+- couldn't this stuff be corrected afterwards? I think yes, but we don't enough (if any) have reliable ground data to correct them on, and at the end of the day we want accurate predictions (who would be interested in us accurately predicted incorrect things?)...so I guess for now I need to use this more intense method? maybe a way to speed it up is to split screen and have one that's just ndvi, and one that's just pan. ugh. turns out you can't open more than one project at a time...we'll see if there's a good way to do this?
 
-for some reason preprocess on first mosaic file cutouts is now making really weird horizontal sliver instead of what it's supposed to...loooking into this. 
-
-none of these issues existed before (except for the stuff with the foggy mosaic file)...I wonder if this has to do with all the weird git stuff between versions on my computer versus wh1. also could be result of me maybe messing up incorporation of Jesse's debugging edits. 
+- either way, 

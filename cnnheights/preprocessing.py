@@ -1,6 +1,6 @@
 # CURRENT HIGH LEVEL PREPROCESS FUNCTIONS # 
 
-def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1056,1056), dpi=350):
+def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1024,1024), dpi=350):
     r'''
 
     TO DO 
