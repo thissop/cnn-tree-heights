@@ -114,9 +114,9 @@ def predict(model, ndvi_fp, pan_fp, output_dir:str):
         return (mask, meta)
     
     detected_mask, detected_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
-    segmentation_fn = pan_fp.split("\\")[-1].split('.')[0]
-    with rasterio.open(output_dir + segmentation_fn + "_segmented.tif", 'w', **ndvi_image.profile) as segmented_ds:
-        segmented_ds.write(detected_mask, 1)
+    #segmentation_fn = pan_fp.split("\\")[-1].split('.')[0]
+    #with rasterio.open(output_dir + segmentation_fn + "_segmented.tif", 'w', **ndvi_image.profile) as segmented_ds:
+    #    segmented_ds.write(detected_mask, 1)
     #return # Jesse had this as a random return statement...I think this was a mistake? 
 
     def mask_to_polygons(maskF, transform):

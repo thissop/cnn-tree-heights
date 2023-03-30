@@ -1,6 +1,6 @@
 def main(output_dir:str,
          data_dir:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/first-shadows-dataset', 
-         epochs:int=1, training_steps:int=100):
+         epochs:int=1, training_steps:int=5):
 
     r'''
     
@@ -40,7 +40,7 @@ def main(output_dir:str,
     from cnnheights.original_core.visualize import display_images
     import geopandas as gpd
     import warnings                  # ignore annoying warnings
-    warnings.filterwarnings("ignore")
+    warnings.filterwarnings("ignore") 
     import time 
 
     annotations = [os.path.join(data_dir, f'extracted_annotation_{i}.png') for i in range(4)]
@@ -59,7 +59,7 @@ def main(output_dir:str,
     prediction = model.predict(test_images, steps=1)
     prediction[prediction>0.5]=1
     prediction[prediction<=0.5]=0
-    display_images(np.concatenate((test_images, prediction), axis = -1), 'debugging-take-2/output/plots/predictions_display_image_[shadows-dataset].pdf')
+    display_images(np.concatenate((test_images, prediction), axis = -1), 'debugging-take-3/output/plots/predictions_display_image_[shadows-dataset].pdf')
 
     hist_df = pd.DataFrame().from_dict(hist)
     hist_df.to_csv(os.path.join(output_dir, 'history-df.csv'), index=False)
@@ -77,17 +77,17 @@ def main(output_dir:str,
     if not os.path.exists(predictions_dir):
         os.mkdir(predictions_dir)
 
-    predict(model, ndvi_image=ndvi_images[idx], pan_image=pan_images[idx],
-            output_dir=predictions_dir, crs='EPSG:32628')
+    predict(model, ndvi_fp=ndvi_images[idx], pan_fp=pan_images[idx],
+            output_dir=predictions_dir)
 
     import geopandas as gpd
     import matplotlib.pyplot as plt 
 
     fig, ax = plt.subplots()
-    gdf = gpd.read_parquet('debugging-take-2/output/pipeline-output/predictions/predicted_polygons.geoparquet')
+    gdf = gpd.read_parquet('debugging-take-3/output/pipeline-output/predictions/predicted_polygons.geoparquet')
     print(gdf)
     gdf.plot(ax=ax)
-    plt.savefig('debugging-take-2/output/plots/final-predictions_[shadows-dataset].pdf')
+    plt.savefig('debugging-take-3/output/plots/final-predictions_[shadows-dataset].pdf')
 
 if __name__ == '__main__':
-    main(output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-2/output/pipeline-output')
+    main(output_dir='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-3/output/pipeline-output')
