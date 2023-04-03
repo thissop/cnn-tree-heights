@@ -69,18 +69,7 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = 'iaa').random_generator(batch_size, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things?
     val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
     test_generator = DataGenerator(input_image_channel, patch_size, testing_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
-    
-    # do the for _ in range() here to check if issue is before or after	
-    from cnnheights.original_core.visualize import display_images	
-    train_images, real_label = next(train_generator)	
-    ann = real_label[:,:,:,0]	
-    wei = real_label[:,:,:,1]	
-    #overlay of annotation with boundary to check the accuracy	
-    #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight	
-    overlay = ann + wei	
-    overlay = overlay[:,:,:,np.newaxis]	
-    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-3')	
-
+        
     return train_generator, val_generator, test_generator
 
 # not in train_cnn (unless the function call to generators causes the problem)
@@ -121,7 +110,7 @@ def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:li
 
     '''
        
-    from cnnheights.training import load_train_test
+    from cnnheights.tensorflow.training import load_train_test
     import os
     from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity
     from cnnheights.original_core.optimizers import adaDelta
@@ -140,66 +129,98 @@ def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:li
     OPTIMIZER_NAME = 'AdaDelta'
     LOSS_NAME = 'weightmap_tversky'
 
-    # Declare the path to the final model
-    # If you want to retrain an exising model then change the cell where model is declared.
-    # This path is for storing a model after training.
-
-    timestr = time.strftime("%Y%m%d-%H%M")
-    chf = input_image_channel + input_label_channel
-    chs = reduce(lambda a,b: a+str(b), chf, '')
-
-    if logging_dir is not None:
-        model_dir= os.path.join(logging_dir, 'saved_models/UNet/')
-        tensorboard_log_dir = os.path.join(logging_dir, 'logs/')
-
-    else:
-        model_dir = './saved_models/UNet/'
-        tensorboard_log_dir = './logs'
-
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
-
-    if not os.path.exists(tensorboard_log_dir):
-        os.mkdir(tensorboard_log_dir)
-
-    model_path = os.path.join(model_dir,'trees_{}_{}_{}_{}_{}.h5'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs,input_shape[0]))
-
-    # The weights without the model architecture can also be saved. Just saving the weights is more efficent.
-
-    # weight_path="./saved_weights/UNet/{}/".format(timestr)
-    # if not os.path.exists(weight_path):
-    #     os.makedirs(weight_path)
-    # weight_path=weight_path + "{}_weights.best.hdf5".format('UNet_model')
-    # print(weight_path)
-
-    # Define the model and compile it
-    print('\n')
-    print([batch_size, *input_shape])
-    print('\n')
-    model = UNet([batch_size, *input_shape],input_label_channel)
-    model.compile(optimizer=OPTIMIZER, loss=LOSS, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
-
-    # Define callbacks for the early stopping of training, LearningRateScheduler and model checkpointing
-
-    checkpoint = ModelCheckpoint(model_path, monitor='val_loss', verbose=1,
-                             save_best_only=True, mode='min', save_weights_only = False)
-
-    log_dir = os.path.join('./logs','UNet_{}_{}_{}_{}_{}'.format(timestr,OPTIMIZER_NAME,LOSS_NAME,chs, input_shape[0]))
-    tensorboard = TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
-
-    callbacks_list = [checkpoint, tensorboard] #reduceLROnPlat is not required with adaDelta
-
     # do training
     start = time.time()
-    loss_history = model.fit(train_generator,
-                            steps_per_epoch=training_steps,
-                            epochs=epochs,
-                            validation_data=val_generator,
-                            validation_steps=validation_image_count,
-                            callbacks=callbacks_list, use_multiprocessing=use_multiprocessing) # the generator is not very thread safe
+   
+    loss_history = model.fit(train_generator, steps_per_epoch=training_steps, epochs=epochs, validation=val_generator, validation_steps=validation_image_count)
+
+    from cnnheights.pytorch.training import train_model
+
+    train_model(model=model, epochs=epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, img_scale=args.scale, val_percent=args.val / 100, amp=args.amp)
 
     elapsed = time.time()-start
 
     print(f'Elapsed: {elapsed}; Average: {round(elapsed/100, 3)}')
 
     return model, loss_history.history, test_generator
+
+def train_model(
+        model,
+        device,
+        epochs: int = 5,
+        batch_size: int = 1,
+        learning_rate: float = 1e-5,
+        val_percent: float = 0.1,
+        amp: bool = False,
+        weight_decay: float = 1e-8,
+        momentum: float = 0.999,
+        gradient_clipping: float = 1.0,
+):
+    # 1. Create dataset
+    
+    dataset = None 
+
+    # 2. Split into train / validation partitions
+    n_val = int(len(dataset) * val_percent)
+    n_train = len(dataset) - n_val
+    train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
+
+    # 3. Create data loaders
+    loader_args = dict(batch_size=batch_size, num_workers=os.cpu_count(), pin_memory=True)
+    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+    val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
+
+    # 4. Set up the optimizer, the loss, the learning rate scheduler and the loss scaling for AMP
+    optimizer = optim.RMSprop(model.parameters(),
+                              lr=learning_rate, weight_decay=weight_decay, momentum=momentum, foreach=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5)  # goal: maximize Dice score
+    grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
+    criterion = nn.CrossEntropyLoss() if model.n_classes > 1 else nn.BCEWithLogitsLoss()
+    global_step = 0
+
+    # 5. Begin training
+    for epoch in range(1, epochs + 1):
+        model.train()
+        epoch_loss = 0
+        with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img') as pbar:
+            for batch in train_loader:
+                images, true_masks = batch['image'], batch['mask']
+
+                assert images.shape[1] == model.n_channels, \
+                    f'Network has been defined with {model.n_channels} input channels, ' \
+                    f'but loaded images have {images.shape[1]} channels. Please check that ' \
+                    'the images are loaded correctly.'
+
+                images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
+                true_masks = true_masks.to(device=device, dtype=torch.long)
+
+                with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
+                    masks_pred = model(images)
+                    if model.n_classes == 1:
+                        loss = criterion(masks_pred.squeeze(1), true_masks.float())
+                        loss += dice_loss(F.sigmoid(masks_pred.squeeze(1)), true_masks.float(), multiclass=False)
+                    else:
+                        loss = criterion(masks_pred, true_masks)
+                        loss += dice_loss(
+                            F.softmax(masks_pred, dim=1).float(),
+                            F.one_hot(true_masks, model.n_classes).permute(0, 3, 1, 2).float(),
+                            multiclass=True
+                        )
+
+                optimizer.zero_grad(set_to_none=True)
+                grad_scaler.scale(loss).backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
+                grad_scaler.step(optimizer)
+                grad_scaler.update()
+
+                pbar.update(images.shape[0])
+                global_step += 1
+                epoch_loss += loss.item()
+                pbar.set_postfix(**{'loss (batch)': loss.item()})
+
+                # Evaluation round
+                division_step = (n_train // (5 * batch_size))
+                if division_step > 0:
+                    if global_step % division_step == 0:
+                        val_score = evaluate(model, val_loader, device, amp)
+                        scheduler.step(val_score)

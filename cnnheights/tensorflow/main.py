@@ -30,13 +30,13 @@ def main(output_dir:str,
 
     '''
 
-    from cnnheights.training import train_cnn
+    from cnnheights.tensorflow.training import train_cnn
     import os 
     import pandas as pd
     import numpy as np
     import matplotlib.pyplot as plt 
     import json
-    from cnnheights.prediction import predict
+    from cnnheights.tensorflow.prediction import predict
     from cnnheights.original_core.visualize import display_images
     import geopandas as gpd
     import warnings                  # ignore annoying warnings

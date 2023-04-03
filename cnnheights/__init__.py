@@ -1,3 +1,4 @@
-from cnnheights import preprocessing, training, prediction, utilities, plotting
+from cnnheights import preprocessing, utilities, plotting
 from cnnheights import main
-from cnnheights.main import * 
+from cnnheights.tensorflow.main import *
+from cnnheights.tensorflow import prediction, training 
