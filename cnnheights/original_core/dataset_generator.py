@@ -87,6 +87,7 @@ class DataGenerator():
             frame = self.frames[fn]
             patch = frame.random_patch(self.patch_size, normalize)
             patches.append(patch)
+        
         data = np.array(patches)
 
         img = data[..., self.input_image_channel]
@@ -101,6 +102,7 @@ class DataGenerator():
         Args:
             BATCH_SIZE (int): Number of patches to generate in each yield (sampled independently).
             normalize (float): Probability with which a frame is normalized.
+        
         """
         seq = imageAugmentationWithIAA()
 

@@ -1,0 +1,7 @@
+great news! 
+
+data loaders are all converted and ready to go. 
+
+re-add data augmentation later. 
+
+sample images more? 
