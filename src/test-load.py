@@ -17,9 +17,7 @@ def load_data(input_data_dir:str):
     ndvi_images = [i.replace('extracted_annotation', 'extracted_ndvi') for i in annotations]
     pan_images = [i.replace('extracted_annotation', 'extracted_pan') for i in annotations]
 
-    X = []
-    y = [] 
-    trans = transforms.Compose([transforms.ToTensor()])
+    #trans = transforms.Compose([transforms.ToTensor()])
 
     dim = rasterio.open(ndvi_images[0]).read().shape[1:]
 
@@ -70,6 +68,7 @@ def load_data(input_data_dir:str):
 
     return train_loader, val_loader, test_loader
 
-train_loader, val_loader, test_loader = load_data('/Users/yaroslav/Documents/Work/NASA/old/data/first-annotations-push/first-shadows-dataset/')
+#train_loader, val_loader, test_loader = load_data('/Users/yaroslav/Documents/Work/NASA/old/data/first-annotations-push/first-shadows-dataset/')
 
 #inputs, masks = next(iter(train_loader)) 
+

@@ -1,7 +1,64 @@
-great news! 
+really good progress
 
-data loaders are all converted and ready to go. 
+TLDR: model works on making predictions on annotations and inputs. most pressing thing is to incorporate tversky loss. I'm thankfully not stuck right now...I just need to get a bunch of things done for this. 
 
-re-add data augmentation later. 
+LONG: 
 
-sample images more? 
+need to compare torch summary to tensorflow summary
+
+current problem: input shape issues 
+
+i'm pretty sure it's looking at 1056 by 1056 images for input...need to break these down! 
+RuntimeError: Given groups=1, weight of size [64, 3, 3, 3], expected input[2, 2, 1056, 1056] to have 3 channels, but got 2 channels instead
+LOL...indeed there was an issue because it was a UNET designed for rgb, that i changed double_conv(3, 64) to double_conv(2, 64)
+
+new issue now: 
+
+ValueError: Target size (torch.Size([2, 2, 1056, 2112])) must be the same as input size (torch.Size([2, 6, 1056, 1056]))
+
+# https://blog.paperspace.com/unet-architecture-image-segmentation/
+
+is the output weight added to annotation or just annotation? 
+there might be an issue with the output being 1056x2112
+yeah this makes sense given that error message. thankfully i was just reading an article about UNet before I started working that talked about UNet allowing output size to match input size 
+
+# I'll just email jesse quick question (get it working with annotation alone, then email him about weights)
+
+# According to TensorFlow docs, X in model.fit() can be a "generator...returning (inputs, targets) or (inputs, targets, sample_weights)" At present I assume it's following the latter option (inputs, targets, sample_weights)
+
+hence, would it be appropriate to include the weights as the third argument in the TensorDataset()s that go into the DataLoader()s, e.g. in below: 
+    - train_loader = DataLoader(TensorDataset(torch.Tensor(X_train), torch.Tensor(y_train), torch.Tensor(weights_train)), ...) 
+
+    return torch.binary_cross_entropy_with_logits(input, target, weight, pos_weight, reduction_enum)
+
+current issue: ValueError: Target size (torch.Size([1, 2, 1056, 1056])) must be the same as input size (torch.Size([1, 6, 1056, 1056]))
+    - the 6 would make sense if there are 3 input images...UPDATE: This is not the issue (I think), because there are only two input training images. hmm. 
+    - fixed. 
+
+PYTORCH SAMPLE_WEIGHTS INFO 
+    - "sample_weights functionality adds more importance to some samples than others during training.so that the loss function used by the model is weighted per-sample not per class. It changes the way the loss is calculated."
+    - "A “sample weights” array is an array of numbers that specify how much weight each sample in a batch should have in computing the total loss."
+    - "sample_weight: Optional Numpy array of weights for the training samples, used for weighting the loss function (during training only). You can either pass a flat (1D) Numpy array with the same length as the input samples (1:1 mapping between weights and samples), or in the case of temporal data, you can pass a 2D array with shape (samples, sequence_length), to apply a different weight to every timestep of every sample. This argument is not supported when x is a dataset, generator, or keras.utils.Sequence instance, instead provide the sample_weights as the third element of x. Note that sample weighting does not apply to metrics specified via the metrics argument in compile(). To apply sample weighting to your metrics, you can specify them via the weighted_metrics in compile() instead."
+
+- okay i'm glad i realized my mistake ^^ all the different nomenclature for weights and the differences between tensorflow and pytorch 
+- helpful reading ankit's notes....I think I'm going to incorporate it into loss functions...because I think sample weights is something that would get handled by tensorflow if you pass it in as param, but would need to get passed into custom loss externally for pytorch
+
+yes this is a huge breakthrough...ankit makes the tversky loss take the weights out of the tensor that gets supplied to it...I'll just supply the weights tensor separate. 
+
+confirming that we're optimizing tversky in ankit's, so i should incorporate this into this model (tversky is the whole point of the boundaries)
+
+this is supported by the unet implementation pytorch-3dunet on github, that says the input data should follow the format 
+
+|                | 2D           | 3D           |
+|----------------|--------------|--------------|
+| single-channel | (1, Y, X)    | (Z, Y, X)    |
+| multi-channel  | (C, 1, Y, X) | (C, Z, Y, X) |
+
+- "optional weights dataset should contain the values for weighting the loss function in different regions of the input"
+
+
+TO DO 
+- replace tf.reduce_sum stuff with torch operations (test with arrays that you convert to torch tensors)
+- i need to redo training pipeline so it's more transparent with X_train, y_train, etc. (instead of dataloaders hopefully) so I can have an easier time calculating custom loss correctly
+maybe weights go in 
+- compare model structures in summary 
