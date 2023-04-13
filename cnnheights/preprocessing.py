@@ -26,6 +26,7 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
     import numpy as np
     import geopandas as gpd 
     from cnnheights.plotting import save_fig
+    from shapely.geometry import box
 
     dataset = rasterio.open(input_tif) 
 
@@ -34,6 +35,10 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
     extant_key = False 
     if key is not None and os.path.exists(key):
         extant_key = True 
+
+    output_dir = os.path.join(output_dir, f'cutout_{counter}')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
 
     overlapping = True 
     while overlapping: 
@@ -51,11 +56,23 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
         extent = plot.plotting_extent(img, window_transform) 
         
         x1 = extent[0]
-        x2 = extent[1]
+        #x2 = extent[1], #y2 = extent[3]
         y1 = extent[2]
-        y2 = extent[3]
 
-        extracted_polygon = Polygon(((x1,y1), (x2,y1), (x2, y2), (x1,y2))) 
+        output_tif = os.path.join(output_dir, f'cutout_{counter}.tif')
+
+        with rasterio.open(output_tif, 'w',
+                driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
+                dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
+            new_data_set.write(img)#, indexes=2)
+
+        cutout_bounds = rasterio.open(output_tif).bounds
+        extracted_polygon = box(*cutout_bounds)
+        vector_rect_path = os.path.join(output_dir, f'vector_rectangle_{counter}.gpkg')
+        vector_rectangle = gpd.GeoDataFrame({"geometry":[extracted_polygon]})
+        vector_rectangle.to_file(vector_rect_path, driver='GPKG')#, layer='name')
+
+        # PROBLEM COULD BE HERE? 
 
         if extant_key: 
             key_gdf = gpd.read_file(key)
@@ -98,17 +115,6 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
         
         save_fig(plot_path, dpi)
 
-    output_dir = os.path.join(output_dir, f'cutout_{counter}')
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
-
-    output_tif = os.path.join(output_dir, f'cutout_{counter}.tif')
-
-    with rasterio.open(output_tif, 'w',
-            driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
-            dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
-        new_data_set.write(img)#, indexes=2)
-
     output_ndvi = os.path.join(output_dir, f'raw_ndvi_{counter}.tif')
     output_pan = os.path.join(output_dir, f'raw_pan_{counter}.tif')
 
@@ -130,10 +136,6 @@ def sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, coun
         pan_dataset.write(panImg)#, indexes=2)
 
     cutout_raster.close()
-
-    vector_rect_path = os.path.join(output_dir, f'vector_rectangle_{counter}.gpkg')
-    vector_rectangle = gpd.GeoDataFrame({'geometry':[extracted_polygon]}, crs=crs)
-    vector_rectangle.to_file(vector_rect_path, driver='GPKG')#, layer='name')
 
     return key_gdf
 
@@ -164,6 +166,10 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     #warnings.filterwarnings("ignore")
 
+    #for f in os.listdir(output_data_dir): 
+    #    if 'gpkg-shm' or 'gpkg-wal' in f: 
+    #        os.remove(os.path.join(output_data_dir, f))
+
     input_files = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir)]
     
     area_files = np.sort([i for i in input_files if 'vector_rectangle' in i]) 
@@ -172,6 +178,8 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     raw_pan_images = np.sort([i for i in input_files if 'raw_pan' in i])
 
     allAreasWithPolygons = [] 
+
+    print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)])
 
     for i in range(len(area_files)): 
         trainingArea = gps.read_file(area_files[i])
@@ -203,7 +211,6 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     #Parallel(n_jobs=n_jobs)(preprocess_single(index) for index in range(total_jobs))
 
     inputImages = list(zip(raw_ndvi_images,raw_pan_images))
-
     #print(len(inputImages))
     #print(f'Found a total of {len(input_images)} pair of raw image(s) to process!')
 
@@ -213,6 +220,10 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     extract_overlapping(inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, ndviFilename='extracted_ndvi',
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
                                                 boundaryFilename='extracted_boundary', bands=[0])
+
+    #for f in os.listdir(output_data_dir): 
+    #    if 'gpkg-shm' or 'gpkg-wal' in f: 
+    #        os.remove(os.path.join(output_data_dir, f))
 
 # DEVELOPMENT HIGH LEVEL PREPROCESS FUNCTIONS #
 
@@ -510,6 +521,8 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
         ndviImg = rasterio.open(input_images[0])
         panImg = rasterio.open(input_images[1])
 
+        # at this point, issue is not with pan/ndvi
+
         ncndvi,imOverlapppedAreasNdvi = find_overlap(ndviImg, areasWithPolygons, writePath=writePath, imageFilename=[ndviFilename], annotationFilename=annotationFilename, boundaryFilename=boundaryFilename, bands=bands, writeCounter=writeCounter)
         ncpan, imOverlapppedAreasPan = find_overlap(panImg, areasWithPolygons, writePath=writePath, imageFilename=[panFilename], annotationFilename='', boundaryFilename='', bands=bands, writeCounter=writeCounter)
         if ncndvi != ncpan:
@@ -577,6 +590,7 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
     #print(areasWithPolygons)
     #print('about to look into finding overlap')
     for areaID, areaInfo in areasWithPolygons.items():
+        # seems like issue happens before this? 
         #Convert the polygons in the area in a dataframe and get the bounds of the area. 
         polygonsInAreaDf = gpd.GeoDataFrame(areaInfo['polygons'])
         boundariesInAreaDf = gpd.GeoDataFrame(areaInfo['boundaryWeight'])    
@@ -593,6 +607,8 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
             sm = mask(img, [bboxArea], all_touched=True, crop=True )
             profile['height'] = sm[0].shape[1]
             profile['width'] = sm[0].shape[2]
+            # issue exists before this
+            #print(profile['height'], profile['width'])
             profile['transform'] = sm[1] 
             # That's a problem with rasterio, if the height and the width are less then 256 it throws: ValueError: blockysize exceeds raster height 
             # So I set the blockxsize and blockysize to prevent this problem
@@ -609,13 +625,15 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
 
     return(writeCounter, overlapppedAreas)
 
-def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imagesFilename, annotationFilename, boundaryFilename, bands, writeCounter, normalize=True):
+def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imagesFilename, annotationFilename, boundaryFilename, bands, writeCounter, normalize=False):
     """
     Write the part of raw image that overlaps with a training area into a separate image file. 
     Use rowColPolygons to create and write annotation and boundary image from polygons in the training area.
     Note: original name was: writeExtractedImageAndAnnotation
 
     To Do: remove img from args because it's not used? will need to make chagnes to other files that reference it. 
+
+    set normalize to False for Jesse 
 
     """
 
