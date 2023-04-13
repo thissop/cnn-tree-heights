@@ -145,10 +145,7 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     Arguments
     ----------      
 
-    area_files : list
-    annotation_files : `list`  
-    raw_ndvi_images : `list` 
-    raw_pan_images : `list` 
+   
     output_path : `str`
         Output path for all the extracted files to be saved to. Should be Linux/Mac style, and last character should be forward slash `/` 
 
