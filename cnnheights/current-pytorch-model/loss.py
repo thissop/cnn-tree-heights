@@ -36,4 +36,6 @@ def torch_tversky(y_true, y_pred, weights, alpha=0.6, beta=0.4):
     numerator = tp
     denominator = tp + fp + fn + EPSILON
     score = numerator / denominator
-    return 1.0 - torch.mean(score) # tf.reduce_mean()
+    tversky_loss = 1.0 - torch.mean(score) # tf.reduce_mean()
+
+    return tversky_loss
