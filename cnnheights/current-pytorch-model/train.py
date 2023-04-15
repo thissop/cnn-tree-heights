@@ -88,7 +88,6 @@ def train_model(num_epochs:int=25):
     import torch
     import torch.optim as optim
     from torch.optim import lr_scheduler
-    import time
     import copy
 
     num_class = 2 # maybe num class was the problem? it was 6 before, and I just changed it to 2, and it seems to be working haha. 
