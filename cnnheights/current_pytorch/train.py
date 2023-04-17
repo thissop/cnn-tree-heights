@@ -1,8 +1,16 @@
-def train_model(num_epochs:int=25): 
+def train_model(train_loader, val_loader, num_epochs:int=25): 
+    r'''
+    
+    '''
+    
     from torchsummary import summary # used to be torchsummary
     import torch
-    import torch.nn as nn
     import pytorch_unet
+    from collections import defaultdict
+    from cnnheights.current_pytorch.loss import calc_loss
+    import torch.optim as optim
+    from torch.optim import lr_scheduler
+    import copy
 
     device = 'cpu' 
     if torch.backends.mps.is_available(): 
@@ -17,6 +25,13 @@ def train_model(num_epochs:int=25):
     model = model.to(device)
 
     #summary(model, input_size=(2, 1056, 1056))# input_size=(channels, H, W)) # Really mps, but this old summary doesn't support it for some reason
+
+    def print_metrics(metrics, epoch_samples, phase):    
+        outputs = []
+        for k in metrics.keys():
+            outputs.append("{}: {:4f}".format(k, metrics[k] / epoch_samples))
+            
+        print("{}: {}".format(phase, ", ".join(outputs)))    
 
     def conduct_training(model, optimizer, scheduler, num_epochs=25):
         best_model_wts = copy.deepcopy(model.state_dict())
@@ -84,11 +99,6 @@ def train_model(num_epochs:int=25):
         # load best model weights
         model.load_state_dict(best_model_wts)
         return model
-
-    import torch
-    import torch.optim as optim
-    from torch.optim import lr_scheduler
-    import copy
 
     num_class = 2 # maybe num class was the problem? it was 6 before, and I just changed it to 2, and it seems to be working haha. 
 
