@@ -1,4 +1,0 @@
-- toggle layer manager: cmd+1
-- measure tool: cmd+shift+m
-- value tool (for getting pixels): view-->panels-->value tool
-- regions need to be larger than 1024x1024 pixels (neural net looks at 256x256 chunks at a time)

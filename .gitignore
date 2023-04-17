@@ -1,10 +1,11 @@
 *.pyc
 *.DS_Store
-"commit message thoughts.txt"
 .vscode
 cnnheights/__pycache__
-*.aux.xml
 cnnheights/original_core/__pycache__
+cnnheights/pytorch/__pycache__
+cnnheights/tensorflow/__pycache__
+*.aux.xml
 *.pyc
 data/input
 data/*
