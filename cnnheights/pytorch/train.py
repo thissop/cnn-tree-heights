@@ -25,7 +25,7 @@ def load_data(input_data_dir:str, num_patches:int=8):
     from torch.utils.data import TensorDataset, DataLoader
     # ImageFile.LOAD_TRUNCATED_IMAGES = True --> THIS IS BAD!! 
 
-    annotations = [os.path.join(input_data_dir, f'extracted_annotation_{i}.png') for i in range(4)]
+    annotations = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir) if 'extracted_annotation' in i]
     boundaries = [i.replace('extracted_annotation', 'extracted_boundary') for i in annotations]
     ndvi_images = [i.replace('extracted_annotation', 'extracted_ndvi') for i in annotations]
     pan_images = [i.replace('extracted_annotation', 'extracted_pan') for i in annotations]
@@ -103,7 +103,7 @@ def load_data(input_data_dir:str, num_patches:int=8):
 
     return train_loader, val_loader, test_loader, (meta_infos_train, meta_infos_val, meta_infos_test)
 
-def train_model(train_loader, val_loader, num_epochs:int=25): 
+def train_model(model, train_loader, val_loader, num_epochs:int=25, device:str='cpu'): 
     r'''
     
     '''
@@ -115,15 +115,6 @@ def train_model(train_loader, val_loader, num_epochs:int=25):
     import torch.optim as optim
     from torch.optim import lr_scheduler
     import copy
-
-    device = 'cpu' 
-    if torch.backends.mps.is_available(): 
-        device = 'mps'
-
-    elif torch.cuda.is_available(): 
-        device = 'cuda'
-    device = 'cpu' # fix later...issue somewhere with some of the tensors being cpu, some being mps, even after setting here 
-    #print(f"Using device: {device}")
 
     #model = pytorch_unet.UNet(2) # shouldn't it only be n_class =2? 
     #model = model.to(device)
@@ -137,7 +128,7 @@ def train_model(train_loader, val_loader, num_epochs:int=25):
             
         print("{}: {}".format(phase, ", ".join(outputs)))    
 
-    def conduct_training(model, optimizer, scheduler, num_epochs=25):
+    def conduct_training(model, optimizer, scheduler, num_epochs=num_epochs):
         best_model_wts = copy.deepcopy(model.state_dict())
         best_loss = 1e10
 
@@ -177,7 +168,7 @@ def train_model(train_loader, val_loader, num_epochs:int=25):
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
                         outputs = model(inputs)
-                        loss = calc_loss(y_true=labels, y_pred=outputs, weights=loss_weights, metrics=metrics)
+                        loss, metrics = calc_loss(y_true=labels, y_pred=outputs, weights=loss_weights, metrics=metrics)
 
                         # backward + optimize only if in training phase
                         if phase == 'train':
@@ -204,12 +195,8 @@ def train_model(train_loader, val_loader, num_epochs:int=25):
         model.load_state_dict(best_model_wts)
         return model
 
-    num_class = 2 # maybe num class was the problem? it was 6 before, and I just changed it to 2, and it seems to be working haha. 
-
-    model = pytorch_unet.UNet(num_class).to(device)
-
     # Observe that all parameters are being optimized
-    optimizer_ft = optim.Adadelta(lr=1.0, rho=0.95, eps=None)#adaDelta = Adadelta(lr=1.0, rho=0.95, epsilon=None, decay=0.0)
+    optimizer_ft = optim.Adadelta(params=model.parameters(), lr=1.0, rho=0.95)#adaDelta = Adadelta(lr=1.0, rho=0.95, epsilon=None, decay=0.0)
 
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=25, gamma=0.1) # tf equivalent? 
 

@@ -180,10 +180,11 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     allAreasWithPolygons = [] 
 
     print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)])
-
+    write_counters = []
     for i in range(len(area_files)): 
         trainingArea = gps.read_file(area_files[i])
         trainingPolygon = gps.read_file(annotation_files[i])
+        write_counters.append(int(area_files[i].split('_')[-1].split('.')[0]))
 
         #print(f'Read a total of {trainingPolygon.shape[0]} object polygons and {trainingArea.shape[0]} training areas.')
         #print(f'Polygons will be assigned to training areas in the next steps.') 
@@ -210,7 +211,7 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     #Parallel(n_jobs=n_jobs)(preprocess_single(index) for index in range(total_jobs))
 
-    inputImages = list(zip(raw_ndvi_images,raw_pan_images))
+    inputImages = list(zip(raw_ndvi_images, raw_pan_images))
     #print(len(inputImages))
     #print(f'Found a total of {len(input_images)} pair of raw image(s) to process!')
 
@@ -219,7 +220,7 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     # Run the main function for extracting part of ndvi and pan images that overlap with training areas
     extract_overlapping(inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, ndviFilename='extracted_ndvi',
                                                 panFilename='extracted_pan', annotationFilename='extracted_annotation',
-                                                boundaryFilename='extracted_boundary', bands=[0])
+                                                boundaryFilename='extracted_boundary', bands=[0], write_counters=write_counters)
 
     #for f in os.listdir(output_data_dir): 
     #    if 'gpkg-shm' or 'gpkg-wal' in f: 
@@ -496,7 +497,7 @@ def image_normalize(im, axis = (0,1), c = 1e-8):
     r'''Normalize to zero mean and unit standard deviation along the given axis'''
     return (im - im.mean(axis)) / (im.std(axis) + c)
 
-def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
+def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary', write_counters:list=None):
     """
     Iterates over raw ndvi and pan images and using find_overlap() extract areas that overlap with training data. The overlapping areas in raw images are written in a separate file, and annotation and boundary file are created from polygons in the overlapping areas.
     Note that the intersection with the training areas is performed independently for raw ndvi and pan images. This is not an ideal solution and it can be combined in the future.
@@ -523,6 +524,9 @@ def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndv
 
         # at this point, issue is not with pan/ndvi
 
+        if write_counters is not None: 
+            writeCounter = write_counters[i]
+            
         ncndvi,imOverlapppedAreasNdvi = find_overlap(ndviImg, areasWithPolygons, writePath=writePath, imageFilename=[ndviFilename], annotationFilename=annotationFilename, boundaryFilename=boundaryFilename, bands=bands, writeCounter=writeCounter)
         ncpan, imOverlapppedAreasPan = find_overlap(panImg, areasWithPolygons, writePath=writePath, imageFilename=[panFilename], annotationFilename='', boundaryFilename='', bands=bands, writeCounter=writeCounter)
         if ncndvi != ncpan:

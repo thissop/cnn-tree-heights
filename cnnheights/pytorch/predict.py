@@ -4,7 +4,7 @@ def predict(model, test_loader, meta_infos:list, crs:str, output_dir:str, device
     model.eval()   # Set model to evaluate mode
         
     predictions  = []
-    for i in range(meta_infos): 
+    for i in range(len(meta_infos)): 
         inputs, labels, test_loss_weights = next(iter(test_loader))
         inputs = inputs.to(device)
         labels = labels.to(device)

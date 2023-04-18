@@ -34,7 +34,7 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=1, num
             from cnnheights.tensorflow.predict import predict
             import json
 
-            annotations = [i for i in os.listdir(input_data_dir) if 'extracted_annotation' in i]
+            annotations = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir) if 'extracted_annotation' in i]
             boundaries = [i.replace('annotation', 'boundary') for i in annotations]
             ndvi_images = [i.replace('annotation', 'ndvi') for i in annotations]
             pan_images = [i.replace('annotation', 'pan') for i in annotations]
@@ -58,13 +58,14 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=1, num
                 if not os.path.exists(predictions_dir):
                     os.mkdir(predictions_dir)
 
-                predict(model, ndvi_fp=ndvi_images[idx], pan_fp=pan_images[idx],
+                gdf, detected_mask, detected_meta = predict(model, ndvi_fp=ndvi_images[idx], pan_fp=pan_images[idx],
                         output_dir=predictions_dir, counter=test_frame_index) 
 
         else: 
             
             import torch 
-            from cnnheights.pytorch.train import load_data
+            from cnnheights.pytorch.train import load_data, train_model
+            from cnnheights.pytorch.predict import predict
 
             if paradigm == 'pytorch-0': 
                 from cnnheights.pytorch.unet_0 import UNet
@@ -91,13 +92,19 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=1, num
 
             #summary(model, input_size=(2, 1056, 1056))# input_size=(channels, H, W)) # Really mps, but this old summary doesn't support it for some reason
             train_loader, val_loader, test_loader, meta_infos = load_data(input_data_dir=input_data_dir, num_patches=num_patches)
-            
-            model = train_model(train_loader = train_loader, val_loader=val_loader, num_epochs=num_epochs)
+            test_meta_infos = meta_infos[-1]
+            model = train_model(model = model, train_loader = train_loader, val_loader=val_loader, num_epochs=num_epochs, device=device)
 
-            predictions = predict(model=model, test_loader=test_loader, meta_info=meta_infos)
+            predictions = predict(model=model, test_loader=test_loader, meta_infos=test_meta_infos, crs='EPSG:32628', output_dir=output_dir)
 
     else: 
         raise Exception('Illegal value for paradigm argument. See documentation string.')
 
 if __name__ == "__main__": 
-    main()
+    
+    input_data_dir = '/Users/yaroslav/Documents/Work/NASA/current/data/samples/mosaic-0-samples-0/processed'
+    output_dir = '/Users/yaroslav/Documents/Work/GitHub/cnn-tree-heights/temp' 
+    
+    for paradigmn in ['pytorch-0', 'pytorch-1', 'pytorch-2']:
+        print(f'Paradigm: {paradigmn}')
+        main(paradigm=paradigmn, input_data_dir=input_data_dir, output_dir=output_dir)

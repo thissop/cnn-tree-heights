@@ -190,10 +190,12 @@ def predict(model, ndvi_fp, pan_fp, output_dir:str, counter:int=None):
         #gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
         gdf.to_parquet(predicted_fp)#, schema=schema)
 
+        return gdf 
+
     if counter is None: 
         counter = 0 
         
     predicted_fp = os.path.join(output_dir, f'predicted_polygons_{counter}.geoparquet')
-    writeMaskToDisk(detected_mask=detected_mask, detected_meta=detected_meta, wp=predicted_fp, crs=crs)
+    gdf = writeMaskToDisk(detected_mask=detected_mask, detected_meta=detected_meta, wp=predicted_fp, crs=crs)
 
-    return detected_mask, detected_meta
+    return gdf, detected_mask, detected_meta
