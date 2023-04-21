@@ -123,7 +123,7 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
        
     from cnnheights.tensorflow.train import load_train_test
     import os
-    from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity
+    from cnnheights.original_core.loss import tf_tversky_loss, accuracy, dice_coef, dice_loss, specificity, sensitivity
     from cnnheights.original_core.optimizers import adaDelta
     import time
     from functools import reduce
@@ -134,7 +134,7 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
     train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
 
     OPTIMIZER = adaDelta
-    LOSS = tversky
+    LOSS = tf_tversky_loss
 
     # Only for the name of the model in the very end
     OPTIMIZER_NAME = 'AdaDelta'

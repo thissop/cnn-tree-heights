@@ -6,7 +6,7 @@ import tensorflow.keras.backend as K
 import numpy as np
 import tensorflow as tf
 
-def tversky(y_true, y_pred, alpha=0.6, beta=0.4):
+def tf_tversky_loss(y_true, y_pred, weights=None, alpha=0.6, beta=0.4):
     """
     Function to calculate the Tversky loss for imbalanced data
     :param prediction: the logits
@@ -15,13 +15,25 @@ def tversky(y_true, y_pred, alpha=0.6, beta=0.4):
     :param beta: weight of false negatives
     :param weight_map:
     :return: the loss
+
+    Notes
+    -----
+
+    - weights is defined if you're running as test (without generator)
+
     """
     
-    y_t = y_true[...,0]
-    y_t = y_t[...,np.newaxis]
-    # weights
-    y_weights = y_true[...,1]
-    y_weights = y_weights[...,np.newaxis]
+    if weights is None: 
+
+        y_t = y_true[...,0]
+        y_t = y_t[...,np.newaxis]
+        # weights
+        y_weights = y_true[...,1]
+        y_weights = y_weights[...,np.newaxis]
+
+    else: 
+        y_t = y_true 
+        y_weights = weights
     
     ones = 1 
     p0 = y_pred  # proba that voxels are class i

@@ -11,7 +11,10 @@ def dice_loss(pred, target, smooth = 1.):
     
     return loss.mean()
 
-def torch_tversky(y_true, y_pred, weights, alpha=0.6, beta=0.4):
+def accuracy(): 
+    pass 
+
+def torch_tversky_loss(y_true, y_pred, weights, alpha=0.6, beta=0.4):
     """
     Function to calculate the Tversky loss for imbalanced data
     :param y_pred: the logits
@@ -41,12 +44,21 @@ def torch_tversky(y_true, y_pred, weights, alpha=0.6, beta=0.4):
     return tversky_loss
 
 def calc_loss(y_true, y_pred, weights, metrics, alpha:float=0.6, beta:float=0.4):
-    tversky_loss = torch_tversky(y_true=y_true, y_pred=y_pred, weights=weights, alpha=alpha, beta=beta)
+    import sklearn
 
-    pred = torch.sigmoid(y_pred)
-    dice = dice_loss(pred, y_true)
-    
-    metrics['dice'] += dice.data.cpu().numpy() * y_true.size(0)
-    metrics['tversky_loss'] += tversky_loss.data.cpu().numpy() * y_true.size(0)
+    tversky_loss = torch_tversky_loss(y_true=y_true, y_pred=y_pred, weights=weights, alpha=alpha, beta=beta)
 
-    return tversky_loss, metrics
+    pred = torch.sigmoid(y_pred) 
+    dice = dice_loss(pred, y_true) 
+
+    y_pred = pred.detach().numpy().squeeze()
+    y_pred[y_pred<0.5] = 0
+    y_pred[y_pred>=0.5] = 1
+
+    accuracy = sklearn.metrics.accuracy_score(y_true.detach().numpy().squeeze(), y_pred) 
+
+    metrics['dice_loss'] = dice.data.cpu().numpy() * y_true.size(0) 
+    metrics['tversky_loss'] = tversky_loss.data.cpu().numpy() * y_true.size(0) 
+    metrics['accuracy'] = accuracy 
+
+    return tversky_loss, metrics 

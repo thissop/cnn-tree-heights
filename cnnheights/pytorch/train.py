@@ -141,7 +141,8 @@ def train_model(model, train_loader, val_loader, num_epochs:int=25, device:str='
             # Each epoch has a training and validation phase
             for phase in ['train', 'val']:
                 if phase == 'train':
-                    scheduler.step()
+                    if epoch>0: 
+                        scheduler.step()
                     for param_group in optimizer.param_groups:
                         print("LR", param_group['lr'])
                         
