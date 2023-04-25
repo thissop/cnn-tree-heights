@@ -1,2 +1,0 @@
-Bringing them together, and then decided to 
-fixed scheduler and optimizer step for pytorch warning 

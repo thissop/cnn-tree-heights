@@ -83,7 +83,7 @@ def predict(model, output_dir:str, write_counters:list=None,
     Unified prediction
     '''
     
-    from cnnheights.pytorch.loss import calc_loss
+    from cnnheights.loss import torch_calc_loss
     from cnnheights.predict import writeMaskToDisk
     import pandas as pd
     import os 
@@ -207,10 +207,10 @@ def predict(model, output_dir:str, write_counters:list=None,
                 if annotation_paths is not None: 
                     labels = rasterio.open(annotation_paths[k])
                     weights = rasterio.open(weight_paths[k])
-                    metrics.append({'accuracy':accuracy_score(labels, prediction), 'dice_loss':dice_loss(labels, prediction), 'tversky_loss':tf_tversky_loss(labels, prediction, weights)})
+                    metrics.append({'dice_loss':dice_loss(labels, prediction), 'tversky_loss':tf_tversky_loss(labels, prediction, weights)})
 
                 else: 
-                    metrics.append({'accuracy':None, 'dice_loss':None, 'tversky_loss':None})
+                    metrics.append({'dice_loss':None, 'tversky_loss':None})
                 
                 predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})            
 
@@ -243,9 +243,10 @@ def predict(model, output_dir:str, write_counters:list=None,
                 predictions.append({'gdf':gdf, 'prediction':prediction.detach().numpy().squeeze(), 'labels':labels, 'test-loss-weights':test_loss_weights})            
         
                 if len(test_inputs) == 3: 
-                    metrics.append(calc_loss(y_true=labels, y_pred=prediction, weights=test_loss_weights, metrics={})[-1])         
+                    dice, tversky = torch_calc_loss(y_true=labels, y_pred=prediction, weights=test_loss_weights)[-1]
+                    metrics.append({'dice_loss':dice, 'tversky_loss':tversky})         
                 else: 
-                    metrics.append({'accuracy':None, 'dice_loss':None, 'tversky_loss':None})
+                    metrics.append({'dice_loss':None, 'tversky_loss':None})
     
     metrics = pd.DataFrame(metrics)
     metrics.to_csv(os.path.join(output_dir, 'prediction-metrics.csv'), index=False)

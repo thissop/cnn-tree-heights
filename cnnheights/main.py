@@ -1,4 +1,4 @@
-def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=1, num_patches:int=8, training_steps:int=1):
+def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=2, num_patches:int=8, batch_size:int=8):
     r'''
     
     Arguments
@@ -44,7 +44,7 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=1, num
             ndvi_images = [i.replace('annotation', 'ndvi') for i in annotations]
             pan_images = [i.replace('annotation', 'pan') for i in annotations]
 
-            model, hist, test_generator = train_model(ndvi_images, pan_images, annotations, boundaries, logging_dir=output_dir, epochs=num_epochs, training_steps=training_steps)
+            model, hist, test_generator = train_model(ndvi_images, pan_images, annotations, boundaries, logging_dir=output_dir, epochs=num_epochs, batch_size=batch_size)
         
             hist_df = pd.DataFrame().from_dict(hist)
             hist_df.to_csv(os.path.join(output_dir, 'history-df.csv'), index=False)
@@ -90,18 +90,18 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=1, num
             model = model.to(device)
 
             #summary(model, input_size=(2, 1056, 1056))# input_size=(channels, H, W)) # Really mps, but this old summary doesn't support it for some reason
-            train_loader, val_loader, test_loader, meta_infos = load_data(input_data_dir=input_data_dir, num_patches=num_patches)
+            train_loader, val_loader, test_loader, meta_infos = load_data(input_data_dir=input_data_dir, num_patches=num_patches, batch_size=batch_size)
             test_meta_infos = meta_infos[-1]
-            model = train_model(model = model, train_loader = train_loader, val_loader=val_loader, num_epochs=num_epochs, device=device)
+            model, train_val_metrics = train_model(model = model, train_loader = train_loader, val_loader=val_loader, num_epochs=num_epochs, device=device, output_dir=output_dir)
 
-            predictions, metrics = predict(model=model, test_loader=test_loader, meta_infos=test_meta_infos, output_dir=predictions_dir) 
-
+            predictions, predicted_metrics = predict(model=model, test_loader=test_loader, meta_infos=test_meta_infos, output_dir=predictions_dir) 
+    
     else: 
         raise Exception('Illegal value for paradigm argument. See documentation string.') 
 
 if __name__ == "__main__": 
     
-    input_data_dir = '/Users/yaroslav/Documents/Work/NASA/current/data/samples/mosaic-0-samples-0/processed' 
+    input_data_dir = '/Users/yaroslav/Documents/Work/NASA/current/data/samples/mosaic-0-samples-0/processed'  
     output_dir = '/Users/yaroslav/Documents/Work/GitHub/cnn-tree-heights/temp' 
     
     for paradigmn in ['pytorch-2']:#, 'pytorch-0']: #, 'pytorch-1']: 

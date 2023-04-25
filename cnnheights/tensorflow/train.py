@@ -1,4 +1,4 @@
-def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, logging_dir:str=None):
+def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, logging_dir:str=None, batch_size:int=8):
    
     r'''
    
@@ -32,7 +32,7 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     from PIL import ImageFile
     from cnnheights.original_core.frame_utilities import FrameInfo, split_dataset
     from cnnheights.original_core.dataset_generator import DataGenerator
-    from cnnheights.original_core.config import normalize, batch_size, patch_size, input_image_channel, input_label_channel, input_weight_channel
+    from cnnheights.original_core.config import normalize, patch_size, input_image_channel, input_label_channel, input_weight_channel
     # ImageFile.LOAD_TRUNCATED_IMAGES = True --> THIS IS BAD! 
 
     if logging_dir is not None:
@@ -85,7 +85,7 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
 
 # not in train_cnn (unless the function call to generators causes the problem)
 def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:list,
-              epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False,
+              epochs:int=200, batch_size:int=8, use_multiprocessing:bool=False,
               logging_dir:str=None):
 
     r'''
@@ -129,9 +129,9 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
     from functools import reduce
     from cnnheights.original_core.UNet import UNet
     from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
-    from cnnheights.original_core.config import validation_image_count, batch_size, input_shape, input_image_channel, input_label_channel
+    from cnnheights.original_core.config import validation_image_count, input_shape, input_image_channel, input_label_channel
 
-    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
+    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir, batch_size=batch_size)
 
     OPTIMIZER = adaDelta
     LOSS = tf_tversky_loss
@@ -191,8 +191,8 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
 
     # do training
     start = time.time()
+    # When training with input tensors such as TensorFlow data tensors, the default None is equal to the number of samples in your dataset divided by the batch size
     loss_history = model.fit(train_generator,
-                            steps_per_epoch=training_steps,
                             epochs=epochs,
                             validation_data=val_generator,
                             validation_steps=validation_image_count,

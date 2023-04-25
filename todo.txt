@@ -1,4 +1,0 @@
-[ ] history of epochs to pytorch model 
-[ ] pytorch vs tf approach with epochs vs batches vs training steps 
-[ ] fix accuracy (going from 4d tensor to 2d numpy matrix for acc, I'm getting 0s for acc right now)
-[ ] compare and combine metrics 
