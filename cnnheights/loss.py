@@ -49,13 +49,14 @@ def torch_calc_loss(y_true, y_pred, weights, alpha:float=0.6, beta:float=0.4):
     
     from torcheval.metrics import BinaryAccuracy
     import numpy as np
+    from cnnheights.loss import torch_dice_loss
 
     #print(y_pred.size(), y_true.size())
 
     tversky_loss = torch_tversky_loss(y_true=y_true, y_pred=y_pred, weights=weights, alpha=alpha, beta=beta)
     pred = torch.sigmoid(y_pred) 
     
-    dice = dice_loss(pred, y_true).item()
+    dice = torch_dice_loss(pred, y_true).item()
     #acc = [BinaryAccuracy().update(torch.flatten(y_pred[i].squeeze()), torch.flatten(y_true[i].squeeze())).compute().item() for i in range(y_pred.size()[0])]
 
     #metrics['accuracy'].append(acc) )

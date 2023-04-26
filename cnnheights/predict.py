@@ -18,11 +18,36 @@ def mask_to_polygons(maskF, transform):
     # first, find contours with cv2: it's much faster than shapely
     th = 0.5
     mask = maskF.copy()
+
     mask[mask < th] = 0
-    mask[mask >= th] = 1
-    mask = ((mask) * 255).astype(np.uint8)
+    mask[mask >= th] = 1 # already uint8...I already tested it. 
+
+    #mask = mask.astype(np.uint8)
+
+    mask = ((mask) * 255).astype(np.uint8) # go from [0,1] to [0,255]
+
+    # mask = mask.astype(np.uint8) # this doesn't help! every time I run as is, no polygons are found...
+
+    #mask = cv2.convertScaleAbs(mask) --> didn't help )
+
+    # ISSUE COMES FROM HERE: 
+
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
     
+    # image Source, an 8-bit single-channel image. Non-zero pixels are treated as 1's. Zero pixels remain 0's, so the image is treated as binary...If mode equals to #RETR_CCOMP or #RETR_FLOODFILL, the input can also be a 32-bit integer image of labels (CV_32SC1)
+        # can we just set it to 8-bit? why does it have to be 0 vs 255? I don't know why setting to 1s would help things because limit of 8-bit number is [0,255]
+
+    # CV.CHAIN_APPROX_NONE: store all points around countour (basically, don't simplify shape)
+    # what are CV_8UC1 images versus CV_32SC1 images? is this a CV_32SC1 image?
+
+    # doesn't have issue when predicting on binary 0,1 image...compare output polygons? ... feels so extra but I need to do it...need to shift my mentality 
+    # 
+    # mentality: what gets the job done (minimum viable product, whatever quiets the error messages)...versus diving into root of problems
+ 
+    # additional growth: challenging assumptions...I'm assuming here that the issue is coming from the integers themselves, but what if it's just that after only one epoch of training the predictions are so large there are no contours?
+
+    # update on above: it still throws error about data type overflow when I run 5 epochs on 8 patches per epoch step, so I'm going to repeat above with 0,1
+
     #Convert contours from image coordinate to xy coordinate
     contours = transformContoursToXY(contours, transform)
     if not contours: #TODO: Raise an error maybe
@@ -62,7 +87,7 @@ def writeMaskToDisk(detected_mask, detected_meta, save_path:str, write_as_type =
     if 'float' in str(detected_meta['dtype']) and 'int' in write_as_type:
         print(f'Converting prediction from {detected_meta["dtype"]} to {write_as_type}, using threshold of {th}')
         detected_mask[detected_mask<th]=0
-        detected_mask[detected_mask>=th]=1 
+        detected_mask[detected_mask>=th]=1
         detected_mask = detected_mask.astype(write_as_type)
         detected_meta['dtype'] =  write_as_type
 
@@ -71,7 +96,7 @@ def writeMaskToDisk(detected_mask, detected_meta, save_path:str, write_as_type =
     d = {'geometry':[i for i in res if i.type == 'Polygon']}
     gdf = gpd.GeoDataFrame(d, crs=detected_meta['crs'])
     #gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
-    gdf.to_parquet(save_path)#, schema=schema)
+    gdf.to_file(save_path)#, schema=schema)
 
     return gdf 
 
@@ -199,7 +224,7 @@ def predict(model, output_dir:str, write_counters:list=None,
 
                 prediction, predicted_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
 
-                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.geoparquet')         
+                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.gpkg')         
                 gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=meta_infos[k], save_path=predicted_fp)
 
                 labels, test_loss_weights = (None, None)
@@ -238,7 +263,7 @@ def predict(model, output_dir:str, write_counters:list=None,
                 
                 prediction = model(inputs)
 
-                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{i}.geoparquet')         
+                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{i}.gpkg')         
                 gdf = writeMaskToDisk(detected_mask=prediction.detach().numpy().squeeze(), detected_meta=meta_infos[i], save_path=predicted_fp)
                 predictions.append({'gdf':gdf, 'prediction':prediction.detach().numpy().squeeze(), 'labels':labels, 'test-loss-weights':test_loss_weights})            
         

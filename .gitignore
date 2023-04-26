@@ -9,3 +9,5 @@ cnnheights/tensorflow/__pycache__
 *.pyc
 data/input
 data/*
+notes.txt
+todo.txt

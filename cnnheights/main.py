@@ -1,4 +1,4 @@
-def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=2, num_patches:int=8, batch_size:int=8):
+def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=5, num_patches:int=8, batch_size:int=8):
     r'''
     
     Arguments
@@ -59,7 +59,7 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=2, num
                 temp_pan_images = np.array([i.split('/')[-1] for i in pan_images])
                 idx = np.where(temp_pan_images==f'extracted_pan_{test_frame_index}.png')[0][0]
 
-            predictions, metrics = predict(model, output_dir=predictions_dir, ndvi_paths=ndvi_images, pan_paths=pan_images, annotation_paths=annotations, weight_paths=boundaries)
+            predictions, predicted_metrics = predict(model, output_dir=predictions_dir, ndvi_paths=ndvi_images, pan_paths=pan_images, annotation_paths=annotations, weight_paths=boundaries)
 
         else: 
             
@@ -96,12 +96,18 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=2, num
 
             predictions, predicted_metrics = predict(model=model, test_loader=test_loader, meta_infos=test_meta_infos, output_dir=predictions_dir) 
     
+        # PLOTTING / POST PREDICTION ANALYSIS
+
+        from cnnheights.plotting import plot_predictions
+
+        plot_predictions(gdf=predictions[0]['gdf'])
+
     else: 
         raise Exception('Illegal value for paradigm argument. See documentation string.') 
 
 if __name__ == "__main__": 
     
-    input_data_dir = '/Users/yaroslav/Documents/Work/NASA/current/data/samples/mosaic-0-samples-0/processed'  
+    input_data_dir = '/Users/yaroslav/Documents/Work/NASA/current/data/samples/mosaic-0-samples-0/processed' 
     output_dir = '/Users/yaroslav/Documents/Work/GitHub/cnn-tree-heights/temp' 
     
     for paradigmn in ['pytorch-2']:#, 'pytorch-0']: #, 'pytorch-1']: 

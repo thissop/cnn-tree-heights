@@ -110,7 +110,7 @@ def train_model(model, train_loader, val_loader, num_epochs:int=25, device:str='
     from torchsummary import summary # used to be torchsummary
     import torch
     from collections import defaultdict
-    from cnnheights.pytorch.loss import calc_loss
+    from cnnheights.loss import torch_calc_loss
     import torch.optim as optim
     from torch.optim import lr_scheduler
     import copy
@@ -174,7 +174,7 @@ def train_model(model, train_loader, val_loader, num_epochs:int=25, device:str='
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
                         y_pred = model(X_batch)
-                        loss, epoch_metrics = calc_loss(y_true=y_batch, y_pred=y_pred, weights=loss_weights)
+                        loss, epoch_metrics = torch_calc_loss(y_true=y_batch, y_pred=y_pred, weights=loss_weights)
                         tversky_losses.append(epoch_metrics[0])
                         dice_losses.append(epoch_metrics[1])
                         # zero the parameter gradients
@@ -182,7 +182,7 @@ def train_model(model, train_loader, val_loader, num_epochs:int=25, device:str='
                         
                         # backward + optimize only if in training phase
                         if phase == 'train':
-                            loss.backward() 
+                            loss.backward()
                             optimizer.step()
 
                 return np.mean(tversky_losses), np.mean(dice_losses)

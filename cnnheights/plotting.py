@@ -10,6 +10,25 @@ seaborn_colors = sns.color_palette('deep') #
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams["mathtext.fontset"] = "dejavuserif"
 
+###############################################################
+
+def plot_predictions(gdf, plot_path:str=None): 
+    fig, ax = plt.subplots()
+
+    gdf.plot(ax=ax)
+
+    plt.tight_layout()
+
+    if plot_path is None: 
+        plt.show()
+
+    else: 
+        plt.savefig(plot_path)
+
+    
+
+###############################################################
+
 dpi = 350
 
 def save_fig(save_path, dpi:float=350):

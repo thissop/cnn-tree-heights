@@ -1,0 +1,2 @@
+[ ] full pipeline (get predicted heights out; would be good to have done by the time Arthur comes so....X)
+[ ] normalize by 1024x1024 cutout (i.e. not 256x256 patch)
