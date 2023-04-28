@@ -4,6 +4,7 @@ def mask_to_polygons(maskF, transform):
     from collections import defaultdict
     import rasterio
     import numpy as np
+    import geopandas as gpd 
 
     def transformContoursToXY(contours, transform = None):
         tp = []
@@ -22,63 +23,121 @@ def mask_to_polygons(maskF, transform):
     mask[mask < th] = 0
     mask[mask >= th] = 1 # already uint8...I already tested it. 
 
-    #mask = mask.astype(np.uint8)
+    # GDAL APPROACH: 
+    '''
+    seems like there is a C function implementation as opposed to a full python file that needs to be run in terminal...
 
-    mask = ((mask) * 255).astype(np.uint8) # go from [0,1] to [0,255]
+    CPLErr GDALPolygonize(GDALRasterBandH hSrcBand, GDALRasterBandH hMaskBand, OGRLayerH hOutLayer, int iPixValField, char **papszOptions, GDALProgressFunc pfnProgress, void *pProgressArg)
+    Create polygon coverage from raster data.
 
-    # mask = mask.astype(np.uint8) # this doesn't help! every time I run as is, no polygons are found...
-
-    #mask = cv2.convertScaleAbs(mask) --> didn't help )
-
-    # ISSUE COMES FROM HERE: 
-
-    contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    This function creates vector polygons for all connected regions of pixels in the raster sharing a common pixel value. Optionally each polygon may be labeled with the pixel value in an attribute. Optionally a mask band can be provided to determine which pixels are eligible for processing.
     
-    # image Source, an 8-bit single-channel image. Non-zero pixels are treated as 1's. Zero pixels remain 0's, so the image is treated as binary...If mode equals to #RETR_CCOMP or #RETR_FLOODFILL, the input can also be a 32-bit integer image of labels (CV_32SC1)
-        # can we just set it to 8-bit? why does it have to be 0 vs 255? I don't know why setting to 1s would help things because limit of 8-bit number is [0,255]
+    '''
+    def gdal_approach(tiff_path:str, output_path:str, crs:str): 
+        
+        from osgeo import gdal, ogr, osr
 
-    # CV.CHAIN_APPROX_NONE: store all points around countour (basically, don't simplify shape)
-    # what are CV_8UC1 images versus CV_32SC1 images? is this a CV_32SC1 image?
+        '''
+        
+        although this code will work itself in polygonizing predicted mask, 
+        a bunch of modifications throughout the rest of the pipeline would need to 
+        be implemented for the whole system to work with it...and I'm not sure if 
+        implementing those far reaching changes would be a wise thing to do. 
+        for example, it would add yet another layer of complexity to the data loader method, 
+        which would now have to track individual 256x256 tiff files for every single input/output
+        being used...this would require me to add steps to preprocessing to save 256x256 tiff "views"
+        of any input data that's larger than 256x256, which would add a lot of complexity to 
+        our approach. additionally, I would need to modify writeMaskToDisk() to make it more efficient 
+        so it doesn't resave this list of polygons back into the gdf that I originally read it from 
+        just to read it into a list to keep things consistent. 
 
-    # doesn't have issue when predicting on binary 0,1 image...compare output polygons? ... feels so extra but I need to do it...need to shift my mentality 
-    # 
-    # mentality: what gets the job done (minimum viable product, whatever quiets the error messages)...versus diving into root of problems
- 
-    # additional growth: challenging assumptions...I'm assuming here that the issue is coming from the integers themselves, but what if it's just that after only one epoch of training the predictions are so large there are no contours?
+        '''
 
-    # update on above: it still throws error about data type overflow when I run 5 epochs on 8 patches per epoch step, so I'm going to repeat above with 0,1
+        #  get raster datasource
+        src_ds = gdal.Open(tiff_path)
+        srcband = src_ds.GetRasterBand(1)
+        dst_layername = tiff_path.split('/')[-1].split('.')[0]
+        drv = ogr.GetDriverByName("ESRI Shapefile")
+        dst_ds = drv.CreateDataSource(output_path)
 
-    #Convert contours from image coordinate to xy coordinate
-    contours = transformContoursToXY(contours, transform)
-    if not contours: #TODO: Raise an error maybe
-        print('Warning: No contours/polygons detected!!')
-        return [Polygon()]
-    # now messy stuff to associate parent and child contours
-    cnt_children = defaultdict(list)
-    child_contours = set()
-    assert hierarchy.shape[0] == 1
-    # http://docs.opencv.org/3.1.0/d9/d8b/tutorial_py_contours_hierarchy.html
-    for idx, (_, _, _, parent_idx) in enumerate(hierarchy[0]):
-        if parent_idx != -1:
-            child_contours.add(idx)
-            cnt_children[parent_idx].append(contours[idx])
+        sp_ref = osr.SpatialReference()
+        sp_ref.SetFromUserInput(crs)
 
-    # create actual polygons filtering by area (removes artifacts)
-    all_polygons = []
+        dst_layer = dst_ds.CreateLayer(dst_layername, srs = sp_ref )
 
-    for idx, cnt in enumerate(contours):
-        if idx not in child_contours: #and cv2.contourArea(cnt) >= min_area: #Do we need to check for min_area??
-            try:
-                poly = Polygon(
-                    shell=cnt,
-                    holes=[c for c in cnt_children.get(idx, [])])
-                        #if cv2.contourArea(c) >= min_area]) #Do we need to check for min_area??
-                all_polygons.append(poly)
-            except:
-                pass
-                # print("An exception occurred in createShapefileObject; Polygon must have more than 2 points")
+        fld = ogr.FieldDefn("HA", ogr.OFTInteger)
+        dst_layer.CreateField(fld)
+        dst_field = dst_layer.GetLayerDefn().GetFieldIndex("HA")
 
-    return all_polygons
+        gdal.Polygonize( srcband, None, dst_layer, dst_field, [], callback=None )
+
+        all_polygons = list(gpd.read_file(filename=output_path)['geometry'])
+        # above is kinda redundant because we'll re-write it to file right after...but trying to keep things consistent. 
+
+    def cv2_approach(mask=mask): 
+
+        #mask = mask.astype(np.uint8)
+
+        mask = ((mask) * 255).astype(np.uint8) # go from [0,1] to [0,255]
+
+        # mask = mask.astype(np.uint8) # this doesn't help! every time I run as is, no polygons are found...
+
+        #mask = cv2.convertScaleAbs(mask) --> didn't help )
+
+        # ISSUE COMES FROM HERE: 
+
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        
+        # image Source, an 8-bit single-channel image. Non-zero pixels are treated as 1's. Zero pixels remain 0's, so the image is treated as binary...If mode equals to #RETR_CCOMP or #RETR_FLOODFILL, the input can also be a 32-bit integer image of labels (CV_32SC1)
+            # can we just set it to 8-bit? why does it have to be 0 vs 255? I don't know why setting to 1s would help things because limit of 8-bit number is [0,255]
+
+        # CV.CHAIN_APPROX_NONE: store all points around countour (basically, don't simplify shape)
+        # what are CV_8UC1 images versus CV_32SC1 images? is this a CV_32SC1 image?
+
+        # doesn't have issue when predicting on binary 0,1 image...compare output polygons? ... feels so extra but I need to do it...need to shift my mentality 
+        # 
+        # mentality: what gets the job done (minimum viable product, whatever quiets the error messages)...versus diving into root of problems
+    
+        # additional growth: challenging assumptions...I'm assuming here that the issue is coming from the integers themselves, but what if it's just that after only one epoch of training the predictions are so large there are no contours?
+
+        # update on above: it still throws error about data type overflow when I run 5 epochs on 8 patches per epoch step, so I'm going to repeat above with 0,1
+
+        #Convert contours from image coordinate to xy coordinate
+        contours = transformContoursToXY(contours, transform)
+        if not contours: #TODO: Raise an error maybe
+            print('Warning: No contours/polygons detected!!')
+            return [Polygon()]
+        # now messy stuff to associate parent and child contours
+        cnt_children = defaultdict(list)
+        child_contours = set()
+        assert hierarchy.shape[0] == 1
+        # http://docs.opencv.org/3.1.0/d9/d8b/tutorial_py_contours_hierarchy.html
+        for idx, (_, _, _, parent_idx) in enumerate(hierarchy[0]):
+            if parent_idx != -1:
+                child_contours.add(idx)
+                cnt_children[parent_idx].append(contours[idx])
+
+        # create actual polygons filtering by area (removes artifacts)
+        all_polygons = []
+
+        for idx, cnt in enumerate(contours):
+            if idx not in child_contours: #and cv2.contourArea(cnt) >= min_area: #Do we need to check for min_area??
+                try:
+                    poly = Polygon(
+                        shell=cnt,
+                        holes=[c for c in cnt_children.get(idx, [])])
+                            #if cv2.contourArea(c) >= min_area]) #Do we need to check for min_area??
+                    all_polygons.append(poly)
+                except:
+                    pass
+                    # print("An exception occurred in createShapefileObject; Polygon must have more than 2 points")
+
+        return all_polygons
+
+    #all_polygons = cv2_approach()
+    all_polygons = gdal_approach()
+
+    return all_polygons 
 
 def writeMaskToDisk(detected_mask, detected_meta, save_path:str, write_as_type = 'uint8', th = 0.5):
     import geopandas as gpd 
