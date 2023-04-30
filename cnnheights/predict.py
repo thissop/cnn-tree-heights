@@ -159,6 +159,85 @@ def writeMaskToDisk(detected_mask, detected_meta, save_path:str, write_as_type =
 
     return gdf 
 
+def heights_analysis(predicted_gdf, true_gdf, cutlines_shp_file, d:float=9): 
+
+    '''
+    
+    Notes
+    -----
+
+    haha this is very inefficient with for loops and individual comparisons, I just want to get it working first, and then I'll improve it. 
+    
+    '''
+
+    from cnnheights.preprocessing import get_cutline_data
+    from shapely.geometry import LineString, box
+    import geopandas as gpd
+
+    if type(predicted_gdf) is str: 
+        predicted_gdf = gpd.read_file(predicted_gdf)
+    if type(true_gdf) is str: 
+        true_gdf = gpd.read_file(true_gdf)
+
+    crs = predicted_gdf.crs
+
+    '''
+    Three Outcomes: 0 = FN, 1 = FP, 2 = matched
+    1. True Exists, Predicted Doesn't (FN) 
+    2. True Doesn't, Predicted Does (FP)
+    3. True Exists, Predicted Does (Calculate Loss on Length/Height)
+    '''
+    
+    all_centroids = []
+    all_classes = []
+    all_predicted_heights = []
+    all_true_heights = []
+
+    cutline_info = get_cutline_data(predictions=predicted_gdf, cutlines_shp=cutlines_shp_file)
+    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
+    zenith_angle = cutline_info['SUN_ELEV']
+
+    def get_heights(annotations_gdf, dy, zenith_angle):
+        from cnnheights.utilities import height_from_shadow
+        annotation_centroids = annotations_gdf.centroid
+        annotation_lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(annotation_centroids.x, annotation_centroids.y)]
+        annotation_lines_gdf = gpd.GeoDataFrame({'geometry':annotation_lines}, geometry='geometry', crs=crs)
+        annotation_shadow_lines = annotation_lines_gdf.intersection(annotations_gdf, align=False)
+        annotation_shadow_lengths = annotation_shadow_lines.length
+        annotations_shadow_heights = height_from_shadow(annotation_shadow_lengths, zenith_angle=zenith_angle)
+        return annotations_shadow_heights
+    
+    predicted_heights = get_heights(annotations_gdf=predicted_gdf, dy=dy, zenith_angle=zenith_angle)
+    true_heights = get_heights(annotations_gdf=true_gdf, dy=dy, zenith_angle=zenith_angle)
+
+    for i, predicted_shadow in enumerate(predicted_gdf['geometry']): 
+        idx = np.where(true_gdf.overlaps(predicted_shadow)==True)[0]
+        
+        all_centroids.append(predicted_shadow.centroid)
+        all_predicted_heights.append(predicted_heights[i])
+
+        if len(idx) == 0: # predicted exists without true equivalent 
+            all_classes.append(1) # FP 
+            all_true_heights.append(0)
+        
+        else:
+            all_classes.append(2)
+            all_true_heights.append(float(true_heights[idx]))
+
+    for i, true_shadow in enumerate(true_gdf['geometry']): 
+        idx = np.where(predicted_gdf.overlaps(true_shadow)==True)[0]
+        if len(idx) == 0: # true exists without predicted equivalent 
+            all_centroids.append(true_shadow.centroid)
+            all_classes.append(0)
+            all_predicted_heights.append(0)
+            all_true_heights.append(true_heights[i])
+
+    results_d = {'geometry':all_centroids, 'class':all_classes, 'predicted_height':all_predicted_heights, 'true_height':all_true_heights}
+
+    results_gdf = gpd.GeoDataFrame(results_d, crs=crs)
+
+    return results_gdf
+
 def predict(model, output_dir:str, write_counters:list=None, 
             test_loader=None, meta_infos:list=None, device:str='cpu',
             ndvi_paths:list=None, pan_paths:list=None, annotation_paths:list=None, weight_paths:list=None):
