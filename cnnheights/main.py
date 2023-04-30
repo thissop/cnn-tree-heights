@@ -96,7 +96,17 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=5, num
 
             predictions, predicted_metrics = predict(model=model, test_loader=test_loader, meta_infos=test_meta_infos, output_dir=predictions_dir) 
     
+            torch.save(model.state_dict(), os.path.join(output_dir, 'unet_pytorch_model.pt'))
+
         # PLOTTING / POST PREDICTION ANALYSIS
+
+        # Calculate Tree Heights
+
+        
+
+        # Calculate Loss on Tree Heights? 
+        
+
 
         from cnnheights.plotting import plot_predictions
 
@@ -107,9 +117,9 @@ def main(paradigm:str, input_data_dir:str, output_dir:str, num_epochs:int=5, num
 
 if __name__ == "__main__": 
     
-    input_data_dir = '/Users/yaroslav/Documents/Work/NASA/current/data/samples/mosaic-0-samples-0/processed' 
-    output_dir = '/Users/yaroslav/Documents/Work/GitHub/cnn-tree-heights/temp' 
+    input_data_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/first-shadows-dataset' 
+    output_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp/tensorflow' 
     
-    for paradigmn in ['pytorch-2']:#, 'pytorch-0']: #, 'pytorch-1']: 
+    for paradigmn in ['tensorflow-1']:#, 'pytorch-0']: #, 'pytorch-1']: 
         print(f'Paradigm: {paradigmn}') 
         main(paradigm=paradigmn, input_data_dir=input_data_dir, output_dir=output_dir) 

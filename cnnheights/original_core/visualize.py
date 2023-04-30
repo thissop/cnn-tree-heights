@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt  # plotting tools
 from matplotlib.patches import Polygon
-def display_images(img, plot_path:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-2/output/plots'):
+def display_images(img, plot_path:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp/tensorflow/plots'):
     """Display the given set of images, optionally with titles.
     images: array of image tensors in Batch * Height * Width * Channel format.
     titles: optional. A list of titles to display with each image.

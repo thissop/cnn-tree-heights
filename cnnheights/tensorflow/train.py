@@ -79,7 +79,7 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight	
     overlay = ann + wei	
     overlay = overlay[:,:,:,np.newaxis]	
-    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-3')	
+    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp/tensorflow/plots')	
 
     return train_generator, val_generator, test_generator
 

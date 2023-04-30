@@ -463,7 +463,7 @@ def better_preprocess(input_data_dir:str, output_data_dir:str):
 
 # CURRENT LOW LEVEL FUNCTIONS USED BY HIGH LEVEL PREPROCESS # 
 
-def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
+def get_cutline_data(epsg:str=None, north=None, east=None, predictions=None, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
     r'''
     
     return cutline information for an observation based on lat/long
@@ -481,6 +481,17 @@ def get_cutline_data(north:float, east:float, epsg:str, cutlines_shp:str='/Users
     import pandas as pd
 
     # 
+    if predictions is not None:
+        if type(predictions) is str: 
+            predictions = gpd.read_file(predictions)
+        epsg = str(predictions.crs).split(':')[-1]
+        reference_poly = predictions['geometry'][0]
+        c = reference_poly.centroid 
+        east, north = (c.x, c.y)
+        
+    elif north is None or east is None or epsg is None:
+        raise Exception('') 
+
     cutlines_gdf = gpd.read_file(cutlines_shp)
     cutlines_gdf = cutlines_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
     df = pd.DataFrame({'North': [north], 'East': [east]}) # LOL. Lat is N/S, Long is W/E

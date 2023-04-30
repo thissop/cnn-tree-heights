@@ -106,6 +106,14 @@ def predict(model, output_dir:str, write_counters:list=None,
     
     r'''
     Unified prediction
+
+    depending on pytorch implementation, this function won't take in string and load for pytorch model, because you need to initialize the class first; hence, to load a saved model use following code before supplying model to this function: 
+        ```
+        model = UNet(*args, **kwargs)
+        model.load_state_dict(torch.load(PATH))
+        ```
+
+
     '''
     
     from cnnheights.loss import torch_calc_loss
@@ -244,6 +252,7 @@ def predict(model, output_dir:str, write_counters:list=None,
         if meta_infos is None or test_loader is None: 
             raise Exception('')
         else: 
+            
             model.eval()   # Set model to evaluate mode 
 
             for i in range(len(meta_infos)): 
