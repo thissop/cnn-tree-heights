@@ -74,7 +74,7 @@ def mask_to_polygons(maskF, transform):
         all_polygons = list(gpd.read_file(filename=output_path)['geometry'])
         # above is kinda redundant because we'll re-write it to file right after...but trying to keep things consistent. 
 
-    def cv2_approach(mask=mask): 
+    def cv2_approach(mask): 
 
         #mask = mask.astype(np.uint8)
 
@@ -134,8 +134,8 @@ def mask_to_polygons(maskF, transform):
 
         return all_polygons
 
-    #all_polygons = cv2_approach()
-    all_polygons = gdal_approach()
+    all_polygons = cv2_approach(mask=mask)
+    #all_polygons = gdal_approach()
 
     return all_polygons 
 
@@ -170,9 +170,9 @@ def heights_analysis(predicted_gdf, true_gdf, cutlines_shp_file, d:float=9):
     
     '''
 
-    from cnnheights.preprocessing import get_cutline_data
-    from shapely.geometry import LineString, box
+    from cnnheights.utilities import get_heights
     import geopandas as gpd
+    import numpy as np
 
     if type(predicted_gdf) is str: 
         predicted_gdf = gpd.read_file(predicted_gdf)
@@ -193,22 +193,8 @@ def heights_analysis(predicted_gdf, true_gdf, cutlines_shp_file, d:float=9):
     all_predicted_heights = []
     all_true_heights = []
 
-    cutline_info = get_cutline_data(predictions=predicted_gdf, cutlines_shp=cutlines_shp_file)
-    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
-    zenith_angle = cutline_info['SUN_ELEV']
-
-    def get_heights(annotations_gdf, dy, zenith_angle):
-        from cnnheights.utilities import height_from_shadow
-        annotation_centroids = annotations_gdf.centroid
-        annotation_lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(annotation_centroids.x, annotation_centroids.y)]
-        annotation_lines_gdf = gpd.GeoDataFrame({'geometry':annotation_lines}, geometry='geometry', crs=crs)
-        annotation_shadow_lines = annotation_lines_gdf.intersection(annotations_gdf, align=False)
-        annotation_shadow_lengths = annotation_shadow_lines.length
-        annotations_shadow_heights = height_from_shadow(annotation_shadow_lengths, zenith_angle=zenith_angle)
-        return annotations_shadow_heights
-    
-    predicted_heights = get_heights(annotations_gdf=predicted_gdf, dy=dy, zenith_angle=zenith_angle)
-    true_heights = get_heights(annotations_gdf=true_gdf, dy=dy, zenith_angle=zenith_angle)
+    predicted_heights = get_heights(annotations_gdf=predicted_gdf, cutlines_shp_file=cutlines_shp_file)
+    true_heights = get_heights(annotations_gdf=true_gdf, cutlines_shp_file=cutlines_shp_file)
 
     for i, predicted_shadow in enumerate(predicted_gdf['geometry']): 
         idx = np.where(true_gdf.overlaps(predicted_shadow)==True)[0]
@@ -254,7 +240,7 @@ def predict(model, output_dir:str, write_counters:list=None,
 
     '''
     
-    from cnnheights.loss import torch_calc_loss
+    #from cnnheights.loss import torch_calc_loss
     from cnnheights.predict import writeMaskToDisk
     import pandas as pd
     import os 
@@ -263,6 +249,7 @@ def predict(model, output_dir:str, write_counters:list=None,
     from rasterio import windows
     from cnnheights.preprocessing import image_normalize
     from itertools import product
+    import tensorflow as tf
     import numpy as np
         
     predictions  = []
@@ -367,23 +354,30 @@ def predict(model, output_dir:str, write_counters:list=None,
                 pan_image = rasterio.open(pan_paths[k])
 
                 assert ndvi_image.crs == pan_image.crs
-
                 prediction, predicted_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
 
-                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.gpkg')         
-                gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=meta_infos[k], save_path=predicted_fp)
+                prediction_binary = tf.cast(prediction, tf.int8) # ugh these type, data class (np array vs tensor stuff)!! 
+                prediction_binary[prediction_binary<0.5]=0 # this is th in the actual write to disk function, but i have to make a binary mask here to for different loss metrics
+                prediction_binary[prediction_binary>=0.5]=1
 
-                labels, test_loss_weights = (None, None)
+                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.gpkg')    
+
+                gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=ndvi_image.meta, save_path=predicted_fp)
 
                 if annotation_paths is not None: 
-                    labels = rasterio.open(annotation_paths[k])
-                    weights = rasterio.open(weight_paths[k])
-                    metrics.append({'dice_loss':dice_loss(labels, prediction), 'tversky_loss':tf_tversky_loss(labels, prediction, weights)})
+                    labels = rasterio.open(annotation_paths[k]).read(1).astype(np.int8)
+                    
+                    weights = rasterio.open(weight_paths[k]).read(1).astype(np.int8) # lol issue changing it from int because int was defaulting to int64
+
+                    labels = tf.Tensor(labels, dtype=tf.int8)
+                    weights = tf.Tensor(weights, dtype=tf.int8)
+
+                    metrics.append({'':dice_loss(labels, prediction_binary), 'tversky_loss':tf_tversky_loss(labels, prediction_binary, weights), 'accuracy':accuracy_score(labels, prediction_binary)}) # re-add dice loss? 
+                    predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})
 
                 else: 
-                    metrics.append({'dice_loss':None, 'tversky_loss':None})
-                
-                predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})            
+                    metrics.append({'dice_loss':None, 'tversky_loss':None, 'accuracy':None})
+                    predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':None, 'test-loss-weights':None}) # re-add dice loss?  
 
     # PYTORCH 
     elif ndvi_paths is None and pan_paths is None: 
@@ -416,11 +410,12 @@ def predict(model, output_dir:str, write_counters:list=None,
         
                 if len(test_inputs) == 3: 
                     dice, tversky = torch_calc_loss(y_true=labels, y_pred=prediction, weights=test_loss_weights)[-1]
-                    metrics.append({'dice_loss':dice, 'tversky_loss':tversky})         
+                    metrics.append({'dice_loss':dice, 'tversky_loss':tversky}) # @THADDAEUS: need to fix these because pytorch doesn't have working acc rn, but tensorflow metrics dicts do have working acc values in their metrics dictionaries.     
                 else: 
                     metrics.append({'dice_loss':None, 'tversky_loss':None})
     
-    metrics = pd.DataFrame(metrics)
-    metrics.to_csv(os.path.join(output_dir, 'prediction-metrics.csv'), index=False)
+    if annotation_paths is not None: 
+        metrics = pd.DataFrame(metrics)
+        metrics.to_csv(os.path.join(output_dir, 'prediction-metrics.csv'), index=False)
 
     return predictions, metrics

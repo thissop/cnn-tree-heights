@@ -60,16 +60,33 @@ def accuracy(y_true, y_pred):
 def dice_coef(y_true, y_pred, smooth=0.0000001):
     """compute dice coef"""
     y_t = y_true[...,0]
-    y_t = y_t[...,np.newaxis]
+    y_t = y_t[...,np.newaxis] # WHAT does this do???
+
+    #intersection = np.logical_and(y_true, y_pred)
+
+    #return 2. * np.sum(intersection) / (np.sum(y_true) + np.sum(y_pred))    
+
     intersection = K.sum(K.abs(y_t * y_pred), axis=-1)
     union = K.sum(y_t, axis=-1) + K.sum(y_pred, axis=-1)
     return K.mean((2. * intersection + smooth) / (union + smooth), axis=-1)
+    
+    '''
+        # KEPT RETURNING BELOW ESOTERIC ERROR (TENSORFLOWWWWWW):
+
+        return K.mean((2. * intersection + smooth) / (union + smooth), axis=-1)
+    File "/home/fjuhsd/miniconda3/envs/cnnheights38/lib/python3.8/site-packages/tensorflow/python/util/traceback_utils.py", line 153, in error_handler
+        raise e.with_traceback(filtered_tb) from None
+    File "/home/fjuhsd/miniconda3/envs/cnnheights38/lib/python3.8/site-packages/tensorflow/python/framework/constant_op.py", line 102, in convert_to_eager_tensor
+        return ops.EagerTensor(value, ctx.device_name, dtype)
+    TypeError: Cannot convert 2.0 to EagerTensor of dtype int64
+    '''
+
 
 def dice_loss(y_true, y_pred):
     """compute dice loss"""
     y_t = y_true[...,0]
     y_t = y_t[...,np.newaxis]
-    return 1 - dice_coef(y_t, y_pred)
+    return 1 - dice_coef(y_t, y_pred) # y_t, y_pred
 
 def true_positives(y_true, y_pred):
     """compute true positive"""

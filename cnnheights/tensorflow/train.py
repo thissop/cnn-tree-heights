@@ -84,9 +84,9 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     return train_generator, val_generator, test_generator
 
 # not in train_cnn (unless the function call to generators causes the problem)
-def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:list,
-              epochs:int=200, batch_size:int=8, use_multiprocessing:bool=False,
-              logging_dir:str=None):
+def train_model(train_generator, val_generator, 
+                epochs:int=2, batch_size:int=8, use_multiprocessing:bool=False,
+                logging_dir:str=None):
 
     r'''
    
@@ -119,9 +119,10 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
     crs : str
         e.g. EPSG:32628; should probably be ready from internal files.
 
+    if model is provided, skips training and just returns it. 
+
     '''
        
-    from cnnheights.tensorflow.train import load_train_test
     import os
     from cnnheights.original_core.loss import tf_tversky_loss, accuracy, dice_coef, dice_loss, specificity, sensitivity
     from cnnheights.original_core.optimizers import adaDelta
@@ -130,8 +131,6 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
     from cnnheights.original_core.UNet import UNet
     from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
     from cnnheights.original_core.config import validation_image_count, input_shape, input_image_channel, input_label_channel
-
-    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir, batch_size=batch_size)
 
     OPTIMIZER = adaDelta
     LOSS = tf_tversky_loss
@@ -192,8 +191,11 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
     # do training
     start = time.time()
     # When training with input tensors such as TensorFlow data tensors, the default None is equal to the number of samples in your dataset divided by the batch size
+    
+    steps_per_epoch = max([int(epochs/batch_size), 2])
+
     loss_history = model.fit(train_generator,
-                            epochs=epochs,
+                            epochs=epochs, steps_per_epoch=steps_per_epoch, # SET THIS! 
                             validation_data=val_generator,
                             validation_steps=validation_image_count,
                             callbacks=callbacks_list, use_multiprocessing=use_multiprocessing) # the generator is not very thread safe
@@ -202,4 +204,4 @@ def train_model(ndvi_images:list, pan_images:list, annotations:list, boundaries:
 
     print(f'Elapsed: {elapsed}; Average: {round(elapsed/100, 3)}')
 
-    return model, loss_history.history, test_generator
+    return model, loss_history.history

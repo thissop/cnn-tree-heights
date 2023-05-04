@@ -172,7 +172,7 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     input_files = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir)]
     
-    area_files = np.sort([i for i in input_files if 'vector_rectangle' in i]) 
+    area_files = np.sort([i for i in input_files if 'raster_rectangle' in i]) 
     annotation_files = np.sort([i for i in input_files if 'annotation' in i]) 
     raw_ndvi_images = np.sort([i for i in input_files if 'raw_ndvi' in i])
     raw_pan_images = np.sort([i for i in input_files if 'raw_pan' in i])
@@ -640,7 +640,7 @@ def find_overlap(img, areasWithPolygons, writePath, imageFilename, annotationFil
 
     return(writeCounter, overlapppedAreas)
 
-def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imagesFilename, annotationFilename, boundaryFilename, bands, writeCounter, normalize=False):
+def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writePath, imagesFilename, annotationFilename, boundaryFilename, bands, writeCounter, normalize=False, copy_images:bool=False):
     """
     Write the part of raw image that overlaps with a training area into a separate image file. 
     Use rowColPolygons to create and write annotation and boundary image from polygons in the training area.
@@ -649,6 +649,8 @@ def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writ
     To Do: remove img from args because it's not used? will need to make chagnes to other files that reference it. 
 
     set normalize to False for Jesse 
+
+    UPDATE: Not going to save png copies of images for now (will save for annotation and bounadry, because these are going from vector to png)
 
     """
 
@@ -665,15 +667,18 @@ def write_extracted(img, sm, profile, polygonsInAreaDf, boundariesInAreaDf, writ
 
             if normalize: # Note: If the raster contains None values, then you should normalize it separately by calculating the mean and std without those values.
                 dt = image_normalize(dt, axis=None) #  Normalize the image along the width and height, and since here we only have one channel we pass axis as None # FIX THIS!
-            with rasterio.open(os.path.join(writePath, imFn+'_{}.png'.format(writeCounter)), 'w', **profile) as dst:
-                    dst.write(dt, 1) 
+            
+            
+            if copy_images: 
+                with rasterio.open(os.path.join(writePath, imFn+'_{}.png'.format(writeCounter)), 'w', **profile) as dst:
+                        dst.write(dt, 1) 
         
         if annotationFilename:
-            annotation_filepath = os.path.join(writePath,annotationFilename+'_{}.png'.format(writeCounter))
+            annotation_filepath = os.path.join(writePath,annotationFilename+'_{}.tiff'.format(writeCounter))
             # The object is given a value of 1, the outline or the border of the object is given a value of 0 and rest of the image/background is given a a value of 0
             row_col_polygons(polygonsInAreaDf,(sm[0].shape[1], sm[0].shape[2]), profile, annotation_filepath, outline=0, fill = 1)
         if boundaryFilename:
-            boundary_filepath = os.path.join(writePath,boundaryFilename+'_{}.png'.format(writeCounter))
+            boundary_filepath = os.path.join(writePath,boundaryFilename+'_{}.tiff'.format(writeCounter))
             # The boundaries are given a value of 1, the outline or the border of the boundaries is also given a value of 1 and rest is given a value of 0
             row_col_polygons(boundariesInAreaDf,(sm[0].shape[1], sm[0].shape[2]), profile, boundary_filepath, outline=1 , fill=1)
         return(writeCounter+1)
@@ -751,6 +756,7 @@ def row_col_polygons(areaDf, areaShape, profile, filename, outline, fill):
     #    json.dump({'Trees': polygons}, outfile)
     mask = draw_polygons(polygons, areaShape, outline=outline, fill=fill)    
     profile['dtype'] = rasterio.int16
+
     with rasterio.open(filename, 'w', **profile) as dst:
         dst.write(mask.astype(rasterio.int16), 1)
 

@@ -26,7 +26,6 @@ def plot_predictions(gdf, plot_path:str=None):
         plt.savefig(plot_path)
 
     
-
 ###############################################################
 
 dpi = 350
@@ -238,6 +237,31 @@ def plot_heights_distribution(shadows_gdf, save_path:str=None, dpi:int=dpi):
     plt.tight_layout()
 
     save_fig(save_path, dpi)
+
+def plot_height_histograms(heights_gdf:None, true_heights:None, predicted_heights:None, plot_path:str=None):
+    
+    if true_heights is None and predicted_heights is None: 
+        if heights_gdf is None: 
+            raise Exception('')
+        else: 
+            true_heights = heights_gdf['true_height']
+            predicted_heights = heights_gdf['predicted_height']
+    
+    fig, axs = plt.subplots(2, 1, figsize=(3, 6), sharex=True, sharey=True)
+
+    axs[0].hist(true_heights)
+    axs[0].set(xlabel='True Height', title='Ground Truth')
+    axs[1].hist(predicted_heights)
+    axs[1].set(xlabel='Predicted Height', title='Predictions')
+
+    plt.supylabel('Frequency')
+    plt.supxlabel('Height')
+
+    if plot_path is not None: 
+        plt.savefig(plot_path)
+
+    else: 
+        plt.show()
 
 # ML Related
 
