@@ -1,4 +1,4 @@
-def main(paradigm:str, input_data_dir:str, output_dir:str,
+def main(input_data_dir:str, output_dir:str,
          model:str=None, test_input_dir:str=None, 
          num_epochs:int=1, num_patches:int=8, batch_size:int=2):
     r'''
@@ -6,9 +6,6 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
     Arguments
     ---------
 
-    paradigm : str
-        Options include 'tensorflow-1' (optimized tensorflow), 'pytorch-0' (first pytorch implementation), 'pytorch-1' (second pytorch implementation), 'pytorch-2' (third pytorch implementation)
-    
     input_data_dir : str
         Full path to directory with (ndvi_i.tiff, pan_i.tiff, raster_annotation_i.tiff, and raster_boundary_i.tiff).     
     
@@ -68,7 +65,7 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
     import pandas as pd 
     import os 
     from cnnheights.predict import predict
-    from cnnheights.tensorflow.train import train_model, load_train_val
+    from cnnheights.train import train_model, load_train_val
     import json
     from tensorflow import keras
     from cnnheights.predict import heights_analysis
@@ -171,43 +168,7 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
                 plot_height_histograms(true_heights=all_true_heights, predicted_heights=all_predicted_heights, plot_path=plot_path)
 
         else: 
-            
-            # everything below this point is not production worthy...once I get this working I'll take this back into dev, delete it out of dev, and then save it in pytorch dev branch
-
-            import torch 
-            from cnnheights.pytorch.train import load_data, train_model
-
-            if paradigm == 'pytorch-0': 
-                from cnnheights.pytorch.unet_0 import UNet
-                model = UNet()
-
-            elif paradigm == 'pytorch-1':
-                from cnnheights.pytorch.unet_1 import UNet 
-                model = UNet()
-
-            elif paradigm == 'pytorch-2': 
-                from cnnheights.pytorch.unet_2 import UNet
-                model = UNet()
-
-            device = 'cpu' 
-            if torch.backends.mps.is_available(): 
-                device = 'mps'
-
-            elif torch.cuda.is_available(): 
-                device = 'cuda'
-            device = 'cpu' # fix later...issue somewhere with some of the tensors being cpu, some being mps, even after setting here 
-            #print(f"Using device: {device}")
-
-            model = model.to(device)
-
-            #summary(model, input_size=(2, 1056, 1056))# input_size=(channels, H, W)) # Really mps, but this old summary doesn't support it for some reason
-            train_loader, val_loader, test_loader, meta_infos = load_data(input_data_dir=input_data_dir, num_patches=num_patches, batch_size=batch_size)
-            test_meta_infos = meta_infos[-1]
-            model, train_val_metrics = train_model(model = model, train_loader = train_loader, val_loader=val_loader, num_epochs=num_epochs, device=device, output_dir=output_dir)
-
-            predictions, predicted_metrics = predict(model=model, test_loader=test_loader, meta_infos=test_meta_infos, output_dir=predictions_dir) 
-    
-            torch.save(model.state_dict(), os.path.join(output_dir, 'unet_pytorch_model.pt'))
+            raise Exception('')
 
         # PLOTTING / POST PREDICTION ANALYSIS
 
@@ -237,5 +198,5 @@ if __name__ == "__main__":
     input_data_dir = 'data/test-dataset' 
     output_dir = 'temp/tensorflow' 
     standalone_input_dir = 'data/standalone-fake'
-    main(paradigm='tensorflow-1', input_data_dir=input_data_dir, output_dir=output_dir, test_input_dir=standalone_input_dir, 
+    main(input_data_dir=input_data_dir, output_dir=output_dir, test_input_dir=standalone_input_dir, 
          num_epochs=4) 

@@ -239,21 +239,11 @@ def heights_analysis(predicted_gdf, cutlines_shp_file:str, true_gdf=None, d:floa
 
     return results_gdf
 
-def predict(model, output_dir:str, write_counters:list=None, 
-            ndvi_paths:list=None, pan_paths:list=None, 
-            test_loader=None, meta_infos:list=None, device:str='cpu'):
+def predict(model, output_dir:str, ndvi_paths:list, pan_paths:list,
+            write_counters:list=None):
     
     r'''
     Unified prediction
-
-    depending on pytorch implementation, this function won't take in string and load for pytorch model, because you need to initialize the class first; hence, to load a saved model use following code before supplying model to this function: 
-        ```
-        model = UNet(*args, **kwargs)
-        model.load_state_dict(torch.load(PATH))
-        ```
-
-        
-    note: with test_generator it would just be
     
     for i in range(1):
         test_images, test_label = next(test_generator)
@@ -277,175 +267,132 @@ def predict(model, output_dir:str, write_counters:list=None,
     from itertools import product
     import tensorflow as tf
     import numpy as np
+    from cnnheights.original_core.loss import tf_tversky_loss, dice_coef, dice_loss, specificity, sensitivity
         
     predictions  = []
-    metrics = []
-
     if write_counters is None: 
-        write_counters = range(len(meta_infos))
+        write_counters = range(len(ndvi_paths))
 
     # TENSORFLOW
-    if meta_infos is None and test_loader is None: 
-        if ndvi_paths is None or pan_paths is None: 
-            raise Exception('') 
+    if type(model) is str: 
+        from tensorflow import keras 
+        model = keras.models.load_model(model, custom_objects={ 'tversky':tf_tversky_loss,
+                                                                'dice_coef':dice_coef, 'dice_loss':dice_loss,
+                                                                'specificity':specificity, 'sensitivity':sensitivity}) 
+    
+    def addTOResult(res, prediction, row, col, he, wi, operator = 'MAX'):
+        currValue = res[row:row+he, col:col+wi]
+        newPredictions = prediction[:he, :wi]
+        # IMPORTANT: MIN can't be used as long as the mask is initialed with 0!!!!! If you want to use MIN initial the mask with -1 and handle the case of default value(-1) separately.
+        if operator == 'MIN': # Takes the min of current prediction and new prediction for each pixel
+            currValue [currValue == -1] = 1 #Replace -1 with 1 in case of MIN
+            resultant = np.minimum(currValue, newPredictions) 
+        elif operator == 'MAX':
+            resultant = np.maximum(currValue, newPredictions)
+        else: #operator == 'REPLACE':
+            resultant = newPredictions    
+        # Alternative approach; Lets assume that quality of prediction is better in the centre of the image than on the edges
+        # We use numbers from 1-5 to denote the quality, where 5 is the best and 1 is the worst.In that case, the best result would be to take into quality of prediction based upon position in account
+        # So for merge with stride of 0.5, for eg. [12345432100000] AND [00000123454321], should be [1234543454321] instead of [1234543214321] that you will currently get. 
+        # However, in case the values are strecthed before hand this problem will be minimized
+        res[row:row+he, col:col+wi] =  resultant
+        return (res)
+
+    def predict_using_model(model, batch, batch_pos, mask, operator):
+        tm = np.stack(batch, axis = 0)
+        prediction = model.predict(tm)
+        for i in range(len(batch_pos)):
+            (col, row, wi, he) = batch_pos[i]
+            p = np.squeeze(prediction[i], axis = -1)
         
-        else: 
-            if type(model) is str: 
-                from tensorflow import keras 
-                model = keras.models.load_model(model, custom_objects={ 'tversky':tf_tversky_loss,
-                                                                        'dice_coef':dice_coef, 'dice_loss':dice_loss,
-                                                                        'specificity':specificity, 'sensitivity':sensitivity}) 
+            # Instead of replacing the current values with new values, use the user specified operator (MIN,MAX,REPLACE)
             
-            from cnnheights.original_core.loss import tf_tversky_loss, dice_coef, dice_loss, specificity, sensitivity
+            mask = addTOResult(mask, p, row, col, he, wi, operator)
 
-            def addTOResult(res, prediction, row, col, he, wi, operator = 'MAX'):
-                currValue = res[row:row+he, col:col+wi]
-                newPredictions = prediction[:he, :wi]
-                # IMPORTANT: MIN can't be used as long as the mask is initialed with 0!!!!! If you want to use MIN initial the mask with -1 and handle the case of default value(-1) separately.
-                if operator == 'MIN': # Takes the min of current prediction and new prediction for each pixel
-                    currValue [currValue == -1] = 1 #Replace -1 with 1 in case of MIN
-                    resultant = np.minimum(currValue, newPredictions) 
-                elif operator == 'MAX':
-                    resultant = np.maximum(currValue, newPredictions)
-                else: #operator == 'REPLACE':
-                    resultant = newPredictions    
-                # Alternative approach; Lets assume that quality of prediction is better in the centre of the image than on the edges
-                # We use numbers from 1-5 to denote the quality, where 5 is the best and 1 is the worst.In that case, the best result would be to take into quality of prediction based upon position in account
-                # So for merge with stride of 0.5, for eg. [12345432100000] AND [00000123454321], should be [1234543454321] instead of [1234543214321] that you will currently get. 
-                # However, in case the values are strecthed before hand this problem will be minimized
-                res[row:row+he, col:col+wi] =  resultant
-                return (res)
+        return mask
 
-            def predict_using_model(model, batch, batch_pos, mask, operator):
-                tm = np.stack(batch, axis = 0)
-                prediction = model.predict(tm)
-                for i in range(len(batch_pos)):
-                    (col, row, wi, he) = batch_pos[i]
-                    p = np.squeeze(prediction[i], axis = -1)
+    def detect_tree(ndvi_img, pan_img, width=256, height=256, stride = 128, normalize=True):
+        ncols, nrows = ndvi_img.meta['width'], ndvi_img.meta['height']
+        meta = ndvi_img.meta.copy()
+        if 'float' not in meta['dtype']: #The prediction is a float so we keep it as float to be consistent with the prediction. 
+            meta['dtype'] = np.float32
+
+        offsets = product(range(0, ncols, stride), range(0, nrows, stride))
+        big_window = windows.Window(col_off=0, row_off=0, width=ncols, height=nrows)
+        #print(nrows, ncols)
+
+        mask = np.zeros((nrows, ncols), dtype=meta['dtype'])
+
+        # mask = mask -1 # Note: The initial mask is initialized with -1 instead of zero to handle the MIN case (see addToResult)
+        batch = []
+        batch_pos = []
+        for col_off, row_off in offsets:
+            window = windows.Window(col_off=col_off, row_off=row_off, width=width, height=height).intersection(big_window)
+            patch = np.zeros((height, width, 2)) #Add zero padding in case of corner images
+            ndvi_sm = ndvi_img.read(window=window)
+            pan_sm = pan_img.read(window=window)
+            temp_im = np.stack((ndvi_sm, pan_sm), axis = -1)
+            temp_im = np.squeeze(temp_im)
+            
+            if normalize:
+                temp_im = image_normalize(temp_im, axis=(0,1)) # Normalize the image along the width and height i.e. independently per channel
                 
-                    # Instead of replacing the current values with new values, use the user specified operator (MIN,MAX,REPLACE)
-                    
-                    mask = addTOResult(mask, p, row, col, he, wi, operator)
-
-                return mask
-
-            def detect_tree(ndvi_img, pan_img, width=256, height=256, stride = 128, normalize=True):
-                ncols, nrows = ndvi_img.meta['width'], ndvi_img.meta['height']
-                meta = ndvi_img.meta.copy()
-                if 'float' not in meta['dtype']: #The prediction is a float so we keep it as float to be consistent with the prediction. 
-                    meta['dtype'] = np.float32
-
-                offsets = product(range(0, ncols, stride), range(0, nrows, stride))
-                big_window = windows.Window(col_off=0, row_off=0, width=ncols, height=nrows)
-                #print(nrows, ncols)
-
-                mask = np.zeros((nrows, ncols), dtype=meta['dtype'])
-
-                # mask = mask -1 # Note: The initial mask is initialized with -1 instead of zero to handle the MIN case (see addToResult)
+            patch[:window.height, :window.width] = temp_im
+            batch.append(patch)
+            batch_pos.append((window.col_off, window.row_off, window.width, window.height))
+            if (len(batch) == 8):
+                mask = predict_using_model(model, batch, batch_pos, mask, 'MAX')
                 batch = []
                 batch_pos = []
-                for col_off, row_off in offsets:
-                    window = windows.Window(col_off=col_off, row_off=row_off, width=width, height=height).intersection(big_window)
-                    patch = np.zeros((height, width, 2)) #Add zero padding in case of corner images
-                    ndvi_sm = ndvi_img.read(window=window)
-                    pan_sm = pan_img.read(window=window)
-                    temp_im = np.stack((ndvi_sm, pan_sm), axis = -1)
-                    temp_im = np.squeeze(temp_im)
-                    
-                    if normalize:
-                        temp_im = image_normalize(temp_im, axis=(0,1)) # Normalize the image along the width and height i.e. independently per channel
-                        
-                    patch[:window.height, :window.width] = temp_im
-                    batch.append(patch)
-                    batch_pos.append((window.col_off, window.row_off, window.width, window.height))
-                    if (len(batch) == 8):
-                        mask = predict_using_model(model, batch, batch_pos, mask, 'MAX')
-                        batch = []
-                        batch_pos = []
-                        
-                # To handle the edge of images as the image size may not be divisible by n complete batches and few frames on the edge may be left.
-                if batch:
-                    mask = predict_using_model(model, batch, batch_pos, mask, 'MAX')
-                    batch = []
-                    batch_pos = []
-
-                return (mask, meta)
-            
-            predictions = []
-
-            for k in range(len(ndvi_paths)): 
-
-                ndvi_image = rasterio.open(ndvi_paths[k])
-                pan_image = rasterio.open(pan_paths[k])
-
-                assert ndvi_image.crs == pan_image.crs
-                prediction, predicted_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
-
-                #prediction_binary = tf.cast(prediction, tf.int8) # ugh these type, data class (np array vs tensor stuff)!! 
-                prediction[prediction<0.5]=0 # this is th in the actual write to disk function, but i have to make a binary mask here to for different loss metrics
-                prediction[prediction>=0.5]=1
-
-                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.gpkg')    
-
-                gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=predicted_meta, save_path=predicted_fp)
-
-                # NOT WORKING: WIERD ERRORS
-                '''
-                if annotation_paths is not None: 
-                    
-                    pass
-                    
-                    #labels = rasterio.open(annotation_paths[k]).read(1).astype(np.int8)
-                    
-                    #weights = rasterio.open(weight_paths[k]).read(1).astype(np.int8) # lol issue changing it from int because int was defaulting to int64
-
-                    #labels = tf.Tensor(labels, dtype=tf.int8)
-                    #weights = tf.Tensor(weights, dtype=tf.int8)
-
-                    #metrics.append({'':dice_loss(labels, prediction_binary), 'tversky_loss':tf_tversky_loss(labels, prediction_binary, weights), 'accuracy':accuracy_score(labels, prediction_binary)}) # re-add dice loss? 
-                    #predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})
-                else: 
-                    pass 
-                    #metrics.append({'dice_loss':None, 'tversky_loss':None, 'accuracy':None})
-                '''
-
-                predictions.append({'gdf':gdf, 'prediction':prediction}) # re-add dice loss?  
-
-    # PYTORCH ---> BROKEN!
-    elif ndvi_paths is None and pan_paths is None: 
-        if meta_infos is None or test_loader is None: 
-            raise Exception('')
-        else: 
-            
-            model.eval()   # Set model to evaluate mode 
-
-            for i in range(len(meta_infos)): 
-                test_inputs = next(iter(test_loader))
-                if len(test_inputs) == 1: 
-                    inputs = test_inputs
-                    labels, test_loss_weights == (None, None)
-
-                elif len(test_inputs) == 3:  
-                    inputs, labels, test_loss_weights = test_inputs
-                    labels = labels.to(device)
-
-                else: 
-                    raise Exception('')
-
-                inputs = inputs.to(device)
                 
-                prediction = model(inputs)
+        # To handle the edge of images as the image size may not be divisible by n complete batches and few frames on the edge may be left.
+        if batch:
+            mask = predict_using_model(model, batch, batch_pos, mask, 'MAX')
+            batch = []
+            batch_pos = []
 
-                predicted_fp = os.path.join(output_dir, f'predicted_polygons_{i}.gpkg')         
-                gdf = writeMaskToDisk(detected_mask=prediction.detach().numpy().squeeze(), detected_meta=meta_infos[i], save_path=predicted_fp)
-                predictions.append({'gdf':gdf, 'prediction':prediction.detach().numpy().squeeze(), 'labels':labels, 'test-loss-weights':test_loss_weights})            
-        
-                if len(test_inputs) == 3: 
-                    dice, tversky = torch_calc_loss(y_true=labels, y_pred=prediction, weights=test_loss_weights)[-1]
-                    metrics.append({'dice_loss':dice, 'tversky_loss':tversky}) # @THADDAEUS: need to fix these because pytorch doesn't have working acc rn, but tensorflow metrics dicts do have working acc values in their metrics dictionaries.     
-                else: 
-                    metrics.append({'dice_loss':None, 'tversky_loss':None})
+        return (mask, meta)
     
+    predictions = []
+
+    for k in range(len(ndvi_paths)): 
+
+        ndvi_image = rasterio.open(ndvi_paths[k])
+        pan_image = rasterio.open(pan_paths[k])
+
+        assert ndvi_image.crs == pan_image.crs
+        prediction, predicted_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
+
+        #prediction_binary = tf.cast(prediction, tf.int8) # ugh these type, data class (np array vs tensor stuff)!! 
+        prediction[prediction<0.5]=0 # this is th in the actual write to disk function, but i have to make a binary mask here to for different loss metrics
+        prediction[prediction>=0.5]=1
+
+        predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.gpkg')    
+
+        gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=predicted_meta, save_path=predicted_fp)
+
+        # NOT WORKING: WIERD ERRORS
+        '''
+        if annotation_paths is not None: 
+            
+            pass
+            
+            #labels = rasterio.open(annotation_paths[k]).read(1).astype(np.int8)
+            
+            #weights = rasterio.open(weight_paths[k]).read(1).astype(np.int8) # lol issue changing it from int because int was defaulting to int64
+
+            #labels = tf.Tensor(labels, dtype=tf.int8)
+            #weights = tf.Tensor(weights, dtype=tf.int8)
+
+            #metrics.append({'':dice_loss(labels, prediction_binary), 'tversky_loss':tf_tversky_loss(labels, prediction_binary, weights), 'accuracy':accuracy_score(labels, prediction_binary)}) # re-add dice loss? 
+            #predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})
+        else: 
+            pass 
+            #metrics.append({'dice_loss':None, 'tversky_loss':None, 'accuracy':None})
+        '''
+
+        predictions.append({'gdf':gdf, 'prediction':prediction}) # re-add dice loss?  
+
     '''
     if annotation_paths is not None: 
         metrics = pd.DataFrame(metrics)
