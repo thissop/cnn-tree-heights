@@ -1,4 +1,4 @@
-def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, logging_dir:str=None, batch_size:int=8):
+def load_train_val(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, output_dir:str=None, batch_size:int=8):
    
     r'''
    
@@ -35,19 +35,24 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     from cnnheights.original_core.config import normalize, patch_size, input_image_channel, input_label_channel, input_weight_channel
     # ImageFile.LOAD_TRUNCATED_IMAGES = True --> THIS IS BAD! 
 
-    if logging_dir is not None:
-        patch_dir = os.path.join(logging_dir, f'patches{patch_size[0]}/')
+    if output_dir is not None:
+        patch_dir = os.path.join(output_dir, f'patches{patch_size[0]}/')
+        plot_dir = os.path.join(output_dir, 'plots')
     else:
         patch_dir = './patches{}'.format(patch_size[0])
+
+
    
     frames_json = os.path.join(patch_dir,'frames_list.json')
 
     # Read all images/frames into memory
     frames = []
+    meta_infos = []
 
     # problem is not in this for loop
     for i in range(len(ndvi_images)):
         ndvi_img = rasterio.open(ndvi_images[i])
+        meta_infos.append(ndvi_img.meta)
         pan_img = rasterio.open(pan_images[i])
         read_ndvi_img = ndvi_img.read()
         read_pan_img = pan_img.read()
@@ -61,14 +66,11 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
         f = FrameInfo(img=comb_img, annotations=annotation, weight=weight) # problem is not with how this is ordered
         frames.append(f)
    
-    # @THADDAEUS maybe problem is with generator? --> I don't think so...most likely prediction tbh??
-
-    training_frames, validation_frames, testing_frames  = split_dataset(frames, frames_json, patch_dir)
+    (training_frames, validation_frames) = split_dataset(frames, frames_json, patch_dir)
 
     annotation_channels = input_label_channel + input_weight_channel
     train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = 'iaa').random_generator(batch_size, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things?
     val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
-    test_generator = DataGenerator(input_image_channel, patch_size, testing_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
     
     # do the for _ in range() here to check if issue is before or after	
     from cnnheights.original_core.visualize import display_images	
@@ -79,9 +81,9 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight	
     overlay = ann + wei	
     overlay = overlay[:,:,:,np.newaxis]	
-    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp/tensorflow/plots')	
-
-    return train_generator, val_generator, test_generator
+    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path=plot_dir)
+    	
+    return train_generator, val_generator
 
 # not in train_cnn (unless the function call to generators causes the problem)
 def train_model(train_generator, val_generator, 

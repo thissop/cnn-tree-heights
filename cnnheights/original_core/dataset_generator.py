@@ -3,7 +3,6 @@
 from imgaug import augmenters as iaa
 import numpy as np
 
-
 # Sometimes(0.5, ...) applies the given augmenter in 50% of all cases,
 # e.g. Sometimes(0.5, GaussianBlur(0.3)) would blur roughly every second image.
 def imageAugmentationWithIAA():
@@ -107,7 +106,7 @@ class DataGenerator():
         seq = imageAugmentationWithIAA()
 
         while True:
-            X, y = self.random_patch(BATCH_SIZE, normalize)
+            X, y = self.random_patch(BATCH_SIZE, normalize) # @ THADDAEUS: CHECK THIS NORMALIZATION FOR POTENTIAL ERRORS IN FUTURE!!
             if self.augmenter == 'iaa':
                 seq_det = seq.to_deterministic()
                 X = seq_det.augment_images(X)

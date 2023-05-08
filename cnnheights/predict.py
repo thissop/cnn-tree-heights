@@ -159,7 +159,7 @@ def writeMaskToDisk(detected_mask, detected_meta, save_path:str, write_as_type =
 
     return gdf 
 
-def heights_analysis(predicted_gdf, true_gdf, cutlines_shp_file, d:float=9): 
+def heights_analysis(predicted_gdf, cutlines_shp_file:str, true_gdf=None, d:float=9): 
 
     '''
     
@@ -179,13 +179,14 @@ def heights_analysis(predicted_gdf, true_gdf, cutlines_shp_file, d:float=9):
     if type(true_gdf) is str: 
         true_gdf = gpd.read_file(true_gdf)
 
-    crs = predicted_gdf.crs
+    crs = f'EPSG:{predicted_gdf.crs.to_epsg()}'
 
     '''
-    Three Outcomes: 0 = FN, 1 = FP, 2 = matched
-    1. True Exists, Predicted Doesn't (FN) 
-    2. True Doesn't, Predicted Does (FP)
-    3. True Exists, Predicted Does (Calculate Loss on Length/Height)
+    Three Outcomes: -1 = NC, 0 = FN, 1 = FP, 2 = matched
+    -1. Predicted exists, no corresponding true to check  
+    0. True Exists, Predicted Doesn't (FN) 
+    1. True Doesn't, Predicted Does (FP)
+    2. True Exists, Predicted Does (Calculate Loss on Length/Height)
     '''
     
     all_centroids = []
@@ -194,39 +195,53 @@ def heights_analysis(predicted_gdf, true_gdf, cutlines_shp_file, d:float=9):
     all_true_heights = []
 
     predicted_heights = get_heights(annotations_gdf=predicted_gdf, cutlines_shp_file=cutlines_shp_file)
-    true_heights = get_heights(annotations_gdf=true_gdf, cutlines_shp_file=cutlines_shp_file)
+    
+    if true_gdf is not None: 
+    
+        true_heights = get_heights(annotations_gdf=true_gdf, cutlines_shp_file=cutlines_shp_file)
 
-    for i, predicted_shadow in enumerate(predicted_gdf['geometry']): 
-        idx = np.where(true_gdf.overlaps(predicted_shadow)==True)[0]
-        
-        all_centroids.append(predicted_shadow.centroid)
-        all_predicted_heights.append(predicted_heights[i])
+        for i, predicted_shadow in enumerate(predicted_gdf['geometry']): 
+            idx = np.where(true_gdf.overlaps(predicted_shadow)==True)[0] # need to fix for multiple? @THADDAEUS this is a long term thing to fix
+            
+            all_centroids.append(predicted_shadow.centroid)
+            all_predicted_heights.append(predicted_heights[i])
 
-        if len(idx) == 0: # predicted exists without true equivalent 
-            all_classes.append(1) # FP 
-            all_true_heights.append(0)
-        
-        else:
-            all_classes.append(2)
-            all_true_heights.append(float(true_heights[idx]))
+            if len(idx) == 0: # predicted exists without true equivalent 
+                all_classes.append(1) # FP 
+                all_true_heights.append(0) 
+            
+            else:
+                all_classes.append(2) 
+                if len(idx) > 1:
+                    idx = idx[0]
+                all_true_heights.append(float(true_heights[idx])) 
 
-    for i, true_shadow in enumerate(true_gdf['geometry']): 
-        idx = np.where(predicted_gdf.overlaps(true_shadow)==True)[0]
-        if len(idx) == 0: # true exists without predicted equivalent 
-            all_centroids.append(true_shadow.centroid)
-            all_classes.append(0)
-            all_predicted_heights.append(0)
-            all_true_heights.append(true_heights[i])
+        for i, true_shadow in enumerate(true_gdf['geometry']): 
+            idx = np.where(predicted_gdf.overlaps(true_shadow)==True)[0]
+            if len(idx) == 0: # true exists without predicted equivalent 
+                all_centroids.append(true_shadow.centroid)
+                all_classes.append(0)
+                all_predicted_heights.append(0)
+                all_true_heights.append(true_heights[i])
 
-    results_d = {'geometry':all_centroids, 'class':all_classes, 'predicted_height':all_predicted_heights, 'true_height':all_true_heights}
+    else:
+        all_classes = len(predicted_gdf.index)*[-1]
+
+        for i, predicted_shadow in enumerate(predicted_gdf['geometry']):             
+            all_centroids.append(predicted_shadow.centroid)
+            all_predicted_heights.append(predicted_heights[i])
+
+        all_true_heights = all_predicted_heights
+
+    results_d = {'geometry':all_centroids, 'class':all_classes, 'P_height':all_predicted_heights, 'T_height':all_true_heights}
 
     results_gdf = gpd.GeoDataFrame(results_d, crs=crs)
 
     return results_gdf
 
 def predict(model, output_dir:str, write_counters:list=None, 
-            test_loader=None, meta_infos:list=None, device:str='cpu',
-            ndvi_paths:list=None, pan_paths:list=None, annotation_paths:list=None, weight_paths:list=None):
+            ndvi_paths:list=None, pan_paths:list=None, 
+            test_loader=None, meta_infos:list=None, device:str='cpu'):
     
     r'''
     Unified prediction
@@ -237,6 +252,17 @@ def predict(model, output_dir:str, write_counters:list=None,
         model.load_state_dict(torch.load(PATH))
         ```
 
+        
+    note: with test_generator it would just be
+    
+    for i in range(1):
+        test_images, test_label = next(test_generator)
+                        
+        #print(test_images.shape())
+        #5 images per row: pan, ndvi, label, weight, prediction
+        prediction = model.predict(test_images, steps=1)
+        prediction[prediction>0.5]=1
+        prediction[prediction<=0.5]=0   
 
     '''
     
@@ -261,7 +287,7 @@ def predict(model, output_dir:str, write_counters:list=None,
     # TENSORFLOW
     if meta_infos is None and test_loader is None: 
         if ndvi_paths is None or pan_paths is None: 
-            raise Exception('')
+            raise Exception('') 
         
         else: 
             if type(model) is str: 
@@ -346,7 +372,6 @@ def predict(model, output_dir:str, write_counters:list=None,
                 return (mask, meta)
             
             predictions = []
-            metrics = []
 
             for k in range(len(ndvi_paths)): 
 
@@ -356,30 +381,37 @@ def predict(model, output_dir:str, write_counters:list=None,
                 assert ndvi_image.crs == pan_image.crs
                 prediction, predicted_meta = detect_tree(ndvi_img=ndvi_image, pan_img=pan_image)
 
-                prediction_binary = tf.cast(prediction, tf.int8) # ugh these type, data class (np array vs tensor stuff)!! 
-                prediction_binary[prediction_binary<0.5]=0 # this is th in the actual write to disk function, but i have to make a binary mask here to for different loss metrics
-                prediction_binary[prediction_binary>=0.5]=1
+                #prediction_binary = tf.cast(prediction, tf.int8) # ugh these type, data class (np array vs tensor stuff)!! 
+                prediction[prediction<0.5]=0 # this is th in the actual write to disk function, but i have to make a binary mask here to for different loss metrics
+                prediction[prediction>=0.5]=1
 
                 predicted_fp = os.path.join(output_dir, f'predicted_polygons_{k}.gpkg')    
 
-                gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=ndvi_image.meta, save_path=predicted_fp)
+                gdf = writeMaskToDisk(detected_mask=prediction, detected_meta=predicted_meta, save_path=predicted_fp)
 
+                # NOT WORKING: WIERD ERRORS
+                '''
                 if annotation_paths is not None: 
-                    labels = rasterio.open(annotation_paths[k]).read(1).astype(np.int8)
                     
-                    weights = rasterio.open(weight_paths[k]).read(1).astype(np.int8) # lol issue changing it from int because int was defaulting to int64
+                    pass
+                    
+                    #labels = rasterio.open(annotation_paths[k]).read(1).astype(np.int8)
+                    
+                    #weights = rasterio.open(weight_paths[k]).read(1).astype(np.int8) # lol issue changing it from int because int was defaulting to int64
 
-                    labels = tf.Tensor(labels, dtype=tf.int8)
-                    weights = tf.Tensor(weights, dtype=tf.int8)
+                    #labels = tf.Tensor(labels, dtype=tf.int8)
+                    #weights = tf.Tensor(weights, dtype=tf.int8)
 
-                    metrics.append({'':dice_loss(labels, prediction_binary), 'tversky_loss':tf_tversky_loss(labels, prediction_binary, weights), 'accuracy':accuracy_score(labels, prediction_binary)}) # re-add dice loss? 
-                    predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})
-
+                    #metrics.append({'':dice_loss(labels, prediction_binary), 'tversky_loss':tf_tversky_loss(labels, prediction_binary, weights), 'accuracy':accuracy_score(labels, prediction_binary)}) # re-add dice loss? 
+                    #predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':labels, 'test-loss-weights':test_loss_weights})
                 else: 
-                    metrics.append({'dice_loss':None, 'tversky_loss':None, 'accuracy':None})
-                    predictions.append({'gdf':gdf, 'prediction':prediction, 'labels':None, 'test-loss-weights':None}) # re-add dice loss?  
+                    pass 
+                    #metrics.append({'dice_loss':None, 'tversky_loss':None, 'accuracy':None})
+                '''
 
-    # PYTORCH 
+                predictions.append({'gdf':gdf, 'prediction':prediction}) # re-add dice loss?  
+
+    # PYTORCH ---> BROKEN!
     elif ndvi_paths is None and pan_paths is None: 
         if meta_infos is None or test_loader is None: 
             raise Exception('')
@@ -414,8 +446,10 @@ def predict(model, output_dir:str, write_counters:list=None,
                 else: 
                     metrics.append({'dice_loss':None, 'tversky_loss':None})
     
+    '''
     if annotation_paths is not None: 
         metrics = pd.DataFrame(metrics)
         metrics.to_csv(os.path.join(output_dir, 'prediction-metrics.csv'), index=False)
+    '''
 
-    return predictions, metrics
+    return predictions

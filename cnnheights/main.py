@@ -1,5 +1,5 @@
 def main(paradigm:str, input_data_dir:str, output_dir:str,
-         model:str=None, standalone_input_dir:str=None, 
+         model:str=None, test_input_dir:str=None, 
          num_epochs:int=1, num_patches:int=8, batch_size:int=2):
     r'''
     
@@ -18,7 +18,7 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
     model : str
         If you want to skip retraining a model, just provide the string to a saved version of a model here. if you've still provided a input_data_dir, it will provide metrics on how it performs on the predictions in the input data directory, and then will go straight to predicting on data for the stand_alone_input data directory, if that path is provided. 
 
-    standalone_input_dir : str
+    test_input_dir : str
         If you want to predict on inputs without doing loss analysis on them (i.e. inputs without corresponding annotations), provide a directory to them here. 
         
     num_epochs : int 
@@ -68,22 +68,24 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
     import pandas as pd 
     import os 
     from cnnheights.predict import predict
-    from cnnheights.tensorflow.train import train_model, load_train_test
+    from cnnheights.tensorflow.train import train_model, load_train_val
     import json
     from tensorflow import keras
     from cnnheights.predict import heights_analysis
     from cnnheights.original_core.loss import tf_tversky_loss, dice_coef, dice_loss, specificity, sensitivity
     import warnings
-    from cnnheights.plotting import plot_height_histograms
+    import matplotlib.pyplot as plt 
+    from cnnheights.plotting import plot_height_histograms, plot_train_history
     #warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 
     model_paradigms = ['tensorflow-1', 'pytorch-0', 'pytorch-1', 'pytorch-2']
 
-    predictions_dir = os.path.join(output_dir, 'predictions')
-    predictions_plot_dir = os.path.join(predictions_dir, 'plots')
-    standalone_predictions_dir = os.path.join(output_dir, 'standalone_predictions')
+    train_plot_dir = os.path.join(output_dir, 'plots')
+    test_output_dir = os.path.join(output_dir, 'test')
+    test_output_predictions_dir = os.path.join(test_output_dir, 'predictions')
+    test_plot_dir = os.path.join(test_output_dir, 'plots')
 
-    for i in [predictions_dir, predictions_plot_dir, standalone_predictions_dir]:
+    for i in [train_plot_dir, test_output_dir, test_plot_dir, test_output_predictions_dir]:
         if not os.path.exists(i):
             os.mkdir(i)
 
@@ -96,11 +98,11 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
                 boundaries = [i.replace('annotation', 'boundary') for i in raster_annotations]
                 ndvi_images = [i.replace('raster_annotation', 'ndvi').replace('gpkg', 'tiff') for i in raster_annotations]
                 pan_images = [i.replace('ndvi', 'pan') for i in ndvi_images]
-
                 vector_annotations = [i.replace('raster', 'vector').replace('tiff', 'gpkg') for i in raster_annotations]
+
                 # new nomenclature: raster and vector vs raw and extracted 
 
-                train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=raster_annotations, boundaries=boundaries, logging_dir=output_dir, batch_size=batch_size)
+                train_generator, val_generator = load_train_val(ndvi_images=ndvi_images, pan_images=pan_images, annotations=raster_annotations, boundaries=boundaries, output_dir=output_dir, batch_size=batch_size)
             
                 if model is not None: 
                     if type(model) is str: 
@@ -112,69 +114,66 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
 
                     model, hist = train_model(train_generator=train_generator, val_generator=val_generator, logging_dir=output_dir, epochs=num_epochs, batch_size=batch_size)
                     hist_df = pd.DataFrame().from_dict(hist)
-                    hist_df.to_csv(os.path.join(output_dir, 'history-df.csv'), index=False)
-
-                ## MY PREDICT METHOD ## --> COULD GET REPLACED BY USING TEST GENERATOR INSTEAD? 
-                test_frames = [] 
-                with open(os.path.join(output_dir, 'patches256/frames_list.json')) as json_file:
-                    data = json.load(json_file)
-                    test_frames = data['testing_frames']
-
-                #for test_frame_index in test_frames: 
-                #    temp_pan_images = np.array([i.split('/')[-1] for i in pan_images])
-                #    idx = np.where(temp_pan_images==f'extracted_pan_{test_frame_index}.png')[0][0]
-
-                test_ndvi, test_pan, test_annotations, test_boundaries = (np.array(i)[test_frames] for i in (ndvi_images, pan_images, raster_annotations, boundaries))
-                write_counters = [int(i.split('.')[0].split('_')[-1]) for i in test_ndvi]
+                    hist_df.insert(0, 'epoch', np.array(range(len(hist_df.index)))+1)
+                    hist_df.to_csv(os.path.join(output_dir, 'train-val-history.csv'), index=False)
                 
-                predictions, predicted_metrics = predict(model, output_dir=predictions_dir,
-                                                            ndvi_paths=test_ndvi,
-                                                            pan_paths=test_pan,
-                                                            annotation_paths=test_annotations,
-                                                            weight_paths=test_boundaries, 
-                                                            write_counters=write_counters)
+            # 3. STAND ALONE PREDICTION
 
-                print('###')
-                print('###')
-                print(predicted_metrics)
-                print('###')
-                print('###')
-                quit()
+            # NEED TO ADD CALCULATION OF STATS FOR TEST IF ANNOTATIONS ARE PRESENT!
+
+            if test_input_dir is not None: # will return heights analysis if annotations are present in input dir for test
+                
+                test_ndvi_images = [os.path.join(test_input_dir, i) for i in os.listdir(test_input_dir) if 'ndvi_' in i]
+                test_pan_images = [i.replace('ndvi', 'pan') for i in ndvi_images]
+                test_write_counters = [int(i.split('.')[0].split('_')[-1]) for i in ndvi_images]
+                
+                test_raster_annotations = [os.path.join(test_input_dir, i) for i in os.listdir(test_input_dir) if 'raster_annotation' in i]
+                test_vector_annotations = [i.replace('raster', 'vector').split('.')[0]+'.gpkg' for i in test_raster_annotations]
+                test_raster_boundaries = [i.replace('annotation', 'boundary') for i in test_raster_annotations]
+
+                if len(test_raster_annotations) != len(test_ndvi_images):
+                    test_raster_annotations = None
+                    test_vector_annotations = None
+                    test_raster_boundaries = None
+
+                predictions = predict(model, output_dir=test_output_predictions_dir, ndvi_paths=test_ndvi_images, pan_paths=test_pan_images, write_counters=test_write_counters) 
 
                 all_predicted_heights = []
                 all_true_heights = []
 
-                for idx, predicted_gdf in enumerate(predictions): 
-                    true_gdf = vector_annotations[idx]
+                for idx, prediction_dict in enumerate(predictions): 
+                    if test_vector_annotations is not None: 
+                        true_gdf = test_vector_annotations[idx] 
+                    else: 
+                        true_gdf = None 
 
-                    heights_gdf = heights_analysis(predicted_gdf=predicted_gdf, true_gdf=true_gdf)
+                    heights_gdf = heights_analysis(predicted_gdf=prediction_dict['gdf'], true_gdf=true_gdf, cutlines_shp_file='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp') 
 
-                    heights_gdf.to_file(os.path.join(output_dir, f'heights_analysis_output_{idx}.gpkg'))
+                    #from shapely.validation import make_valid
 
-                    all_predicted_heights = np.concatenate((all_predicted_heights, heights_gdf['predicted_height']))
-                    all_true_heights = np.concatenate((all_true_heights, heights_gdf['true_height']))
+                    #valid_shape = make_valid(invalid_shape)
 
-                    plot_path = os.path.join(predictions_plot_dir, f'heights_histogram_{write_counters[i]}.png')
+                    heights_gdf.to_file(os.path.join(test_output_dir, f'heights_analysis_output_{idx}.gpkg'))
+
+                    heights_df = pd.DataFrame()
+                    heights_df['class'] = heights_gdf['class']
+                    heights_df['predicted_height'] = heights_gdf['P_height'] 
+                    heights_df['true_height'] = heights_gdf['T_height']
+                    heights_df.to_csv(os.path.join(test_output_dir, f'heights_analysis_output_{idx}.csv'), index=False)
+
+                    all_predicted_heights = np.concatenate((all_predicted_heights, heights_gdf['P_height']))
+                    all_true_heights = np.concatenate((all_true_heights, heights_gdf['T_height']))
+
+                    plot_path = os.path.join(test_plot_dir, f'heights_histogram_{test_write_counters[idx]}.png')
                     plot_height_histograms(heights_gdf=heights_gdf, plot_path=plot_path)
 
-                plot_path = os.path.join(predictions_plot_dir, f'all_heights_histogram_{write_counters[i]}.png')
+                plot_path = os.path.join(test_plot_dir, f'all_heights_histogram.png')
                 plot_height_histograms(true_heights=all_true_heights, predicted_heights=all_predicted_heights, plot_path=plot_path)
-
-            # 3. STAND ALONE PREDICTION
-
-            if standalone_input_dir is not None: 
-
-                raster_annotations = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir) if 'raster_annotation' in i]
-                boundaries = [i.replace('annotation', 'boundary') for i in raster_annotations]
-                ndvi_images = [i.replace('raster_annotation', 'ndvi').replace('gpkg', 'tiff') for i in raster_annotations]
-                pan_images = [i.replace('ndvi', 'pan') for i in ndvi_images]
-                write_counters = [int(i.split('.')[0].split('_')[-1]) for i in ndvi_images]
-
-                predictions = predict(model, output_dir=standalone_predictions_dir, ndvi_paths=test_ndvi, pan_paths=test_pan, write_counters=write_counters) 
-
 
         else: 
             
+            # everything below this point is not production worthy...once I get this working I'll take this back into dev, delete it out of dev, and then save it in pytorch dev branch
+
             import torch 
             from cnnheights.pytorch.train import load_data, train_model
 
@@ -212,6 +211,16 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
 
         # PLOTTING / POST PREDICTION ANALYSIS
 
+        # 1. Plot Train/Val History ---> MOVE THIS TO PLOTTING FUNCTION? 
+
+        hist_path = os.path.join(output_dir, 'train-val-history.csv')
+        if os.path.exists(hist_path): 
+            plot_train_history(train_val_hist_df=hist_path, plot_dir=train_plot_dir)
+
+        # 2. 
+
+        # 2. Plot 
+
         # Calculate Tree Heights
 
         # Calculate Loss on Tree Heights? 
@@ -225,8 +234,8 @@ def main(paradigm:str, input_data_dir:str, output_dir:str,
 
 if __name__ == "__main__": 
     
-    input_data_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/test-dataset' 
-    output_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp/tensorflow' 
-    standalone_input_dir = '/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/data/standalone-fake'
-    main(paradigm='tensorflow-1', input_data_dir=input_data_dir, output_dir=output_dir, standalone_input_dir=standalone_input_dir, 
-         num_epochs=1) 
+    input_data_dir = 'data/test-dataset' 
+    output_dir = 'temp/tensorflow' 
+    standalone_input_dir = 'data/standalone-fake'
+    main(paradigm='tensorflow-1', input_data_dir=input_data_dir, output_dir=output_dir, test_input_dir=standalone_input_dir, 
+         num_epochs=4) 

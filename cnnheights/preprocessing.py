@@ -484,10 +484,12 @@ def get_cutline_data(epsg:str=None, north=None, east=None, predictions=None, cut
     if predictions is not None:
         if type(predictions) is str: 
             predictions = gpd.read_file(predictions)
-        epsg = str(predictions.crs).split(':')[-1]
+        
+        epsg = f'{predictions.crs.to_epsg()}'
+            
         reference_poly = predictions['geometry'][0]
         c = reference_poly.centroid 
-        east, north = (c.x, c.y)
+        east, north = (c.x, c.y) 
         
     elif north is None or east is None or epsg is None:
         raise Exception('') 

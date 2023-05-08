@@ -9,7 +9,7 @@ seaborn_colors = sns.color_palette('deep') #
 
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams["mathtext.fontset"] = "dejavuserif"
-
+dpi = 350
 ###############################################################
 
 def plot_predictions(gdf, plot_path:str=None): 
@@ -25,25 +25,81 @@ def plot_predictions(gdf, plot_path:str=None):
     else: 
         plt.savefig(plot_path)
 
+def plot_train_history(train_val_hist_df=None, plot_dir:str=None):
+    import pandas as pd 
+    import os 
+
+    if type(train_val_hist_df) is str: 
+        train_val_hist_df = pd.read_csv(train_val_hist_df)
+
+    epochs = train_val_hist_df['epoch']
+
+    fig, axs = plt.subplots(2, 1, figsize=(6,3))
+
+    ax = axs[0]
+
+    for i in ['specificity', 'sensitivity', 'accuracy']:
+        ax.plot(epochs, train_val_hist_df[i], label=f'train {i}')
+
+    for i in ['specificity', 'sensitivity', 'accuracy']:
+        ax.plot(epochs, train_val_hist_df[f'val_{i}'], label=f'val {i}')
+
+    ax = axs[1]
+
+    for i in ['loss', 'dice_loss']:
+        ax.plot(epochs, train_val_hist_df[i], label=f'train {i}')
+
+    for i in ['loss', 'dice_loss']:
+        ax.plot(epochs, train_val_hist_df[f'val_{i}'], label=f'val {i}')
+
+    for i in range(2):
+        axs[i].legend(ncol=2, fontsize='small')
+        axs[i].set(xlabel='Epoch')
+
+    plt.tight_layout()
+    if plot_dir is None: 
+        plt.show()
+    else: 
+        plt.savefig(os.path.join(plot_dir, 'train-val-history.pdf'))
+
+    plt.clf()
+    plt.close()
     
-###############################################################
+def plot_heights_distribution(shadows_gdf, save_path:str=None, dpi:int=dpi): 
+    import geopandas as gpd 
 
-dpi = 350
+    fig, ax = plt.subplots()
 
-def save_fig(save_path, dpi:float=350):
-    if save_path is not None: 
-        if save_path.split('.')[0] == 'png': 
-            plt.savefig(save_path, dpi=dpi)
+    ax.hist(shadows_gdf['heights'])
+    ax.set(xlabel='Tree Height (m)', ylabel='Frequency')
+
+    plt.tight_layout()
+
+    save_fig(save_path, dpi)
+
+def plot_height_histograms(heights_gdf=None, true_heights=None, predicted_heights=None, plot_path:str=None):
+    
+    if true_heights is None and predicted_heights is None: 
+        if heights_gdf is None: 
+            raise Exception('')
         else: 
-            plt.savefig(save_path)
+            true_heights = heights_gdf['T_height']
+            predicted_heights = heights_gdf['P_height']
+    
+    fig, axs = plt.subplots(2, 1, figsize=(3, 6), sharex=True, sharey=True)
 
-        plt.close()
+    axs[0].hist(true_heights)
+    axs[0].set(xlabel='True Height', title='Ground Truth', ylabel='Frequency')
+    axs[1].hist(predicted_heights)
+    axs[1].set(xlabel='Predicted Height', title='Predictions', ylabel='Frequency')
+
+    if plot_path is not None: 
+        plt.savefig(plot_path)
 
     else: 
         plt.show()
 
-# Preprocessing Related
-
+# OLD
 def plot_shadow_lengths(shadows_gdf, background_tif:str=None, show_lines:bool=True, save_path:str=None, dpi:int=dpi):
     r'''
     
@@ -224,95 +280,14 @@ def plot_annotation_diagnostics(shadows_gdf, save_path:str=None):
 
     save_fig(save_path.replace('.','[pca-dbscan].'))
 
-# Post Processing Related
-
-def plot_heights_distribution(shadows_gdf, save_path:str=None, dpi:int=dpi): 
-    import geopandas as gpd 
-
-    fig, ax = plt.subplots()
-
-    ax.hist(shadows_gdf['heights'])
-    ax.set(xlabel='Tree Height (m)', ylabel='Frequency')
-
-    plt.tight_layout()
-
-    save_fig(save_path, dpi)
-
-def plot_height_histograms(heights_gdf:None, true_heights:None, predicted_heights:None, plot_path:str=None):
-    
-    if true_heights is None and predicted_heights is None: 
-        if heights_gdf is None: 
-            raise Exception('')
+def save_fig(save_path, dpi:float=350):
+    if save_path is not None: 
+        if save_path.split('.')[0] == 'png': 
+            plt.savefig(save_path, dpi=dpi)
         else: 
-            true_heights = heights_gdf['true_height']
-            predicted_heights = heights_gdf['predicted_height']
-    
-    fig, axs = plt.subplots(2, 1, figsize=(3, 6), sharex=True, sharey=True)
+            plt.savefig(save_path)
 
-    axs[0].hist(true_heights)
-    axs[0].set(xlabel='True Height', title='Ground Truth')
-    axs[1].hist(predicted_heights)
-    axs[1].set(xlabel='Predicted Height', title='Predictions')
-
-    plt.supylabel('Frequency')
-    plt.supxlabel('Height')
-
-    if plot_path is not None: 
-        plt.savefig(plot_path)
+        plt.close()
 
     else: 
         plt.show()
-
-# ML Related
-
-def plot_training_diagnostics(loss_history, save_path:str=None):
-    r'''
-    _Plot diagnostic plots from training process._
-    
-    Parameters
-    ----------      
-
-    loss_history : `dict`
-        By default, Ankit's original train_model functionality returned a one-item list with a Keras history object. My version now returns the dictionary from that one item, and that is what should be provided to this function. 
-
-    save_path : `str`
-        If defined, plots will be saved at this directory together. 
-
-    Returns
-    -------
-
-    figures : `list`
-        List of figures 
-
-    '''
-    import matplotlib.pyplot as plt 
-    import seaborn as sns
-    import numpy as np
-    import os
-
-    train_keys = ['loss', 'dice_coef', 'dice_loss', 'specificity', 'sensitivity', 'accuracy']
-
-    x = np.arange(0, len(loss_history['loss']))
-
-    figures = []
-
-    for train_key in train_keys:
-        fig, ax = plt.subplots()
-
-        val_key = f'val_{train_key}'
-        ax.plot(x, loss_history[train_key], label=train_key)
-        ax.plot(x, loss_history[val_key], label=val_key)
-        ax.legend(loc='best')
-
-        ax.set(xlabel='Training Epoch', ylabel=train_key.title().replace('_', ' '))
-
-        #$plt.tight_layout()
-
-        figures.append(fig)
-        
-        if save_path is not None: 
-            plt.savefig(os.path.join(save_path, f'{train_key}.png'), dpi=200)
-            plt.close()
-    
-    return figures
-      
