@@ -6,7 +6,7 @@ patch_generation_stratergy = 'random' # 'random' or 'sequential'
 patch_size = (256,256,4) # Height * Width * (Input + Output) channels
 
 # Probability with which the generated patches should be normalized 0 -> don't normalize, 1 -> normalize all
-normalize = 0.4 
+normalize = 1
 
 # Shape of the input data, height*width*channel; Here channels are NVDI and Pan
 input_shape = (256,256,2)

@@ -3,7 +3,6 @@
 from imgaug import augmenters as iaa
 import numpy as np
 
-
 # Sometimes(0.5, ...) applies the given augmenter in 50% of all cases,
 # e.g. Sometimes(0.5, GaussianBlur(0.3)) would blur roughly every second image.
 def imageAugmentationWithIAA():
@@ -87,6 +86,7 @@ class DataGenerator():
             frame = self.frames[fn]
             patch = frame.random_patch(self.patch_size, normalize)
             patches.append(patch)
+        
         data = np.array(patches)
 
         img = data[..., self.input_image_channel]
@@ -101,11 +101,12 @@ class DataGenerator():
         Args:
             BATCH_SIZE (int): Number of patches to generate in each yield (sampled independently).
             normalize (float): Probability with which a frame is normalized.
+        
         """
         seq = imageAugmentationWithIAA()
 
         while True:
-            X, y = self.random_patch(BATCH_SIZE, normalize)
+            X, y = self.random_patch(BATCH_SIZE, normalize) # @ THADDAEUS: CHECK THIS NORMALIZATION FOR POTENTIAL ERRORS IN FUTURE!!
             if self.augmenter == 'iaa':
                 seq_det = seq.to_deterministic()
                 X = seq_det.augment_images(X)
@@ -126,7 +127,7 @@ class DataGenerator():
                 # y would have two channels, i.e. annotations and weights.
                 ann =  y[...,[0]]
                 #boundaries have a weight of 10 other parts of the image has weight 1
-                weights = y[...,[1]] # maybe issue is here? 
+                weights = y[...,[1]] 
                 weights[weights>=0.5] = 10
                 weights[weights<0.5] = 1
 

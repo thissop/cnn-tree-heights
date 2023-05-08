@@ -1,7 +1,7 @@
 from tensorflow.keras import models, layers
 from tensorflow.keras import regularizers
 
-def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regularizers.l2(0.0001), gaussian_noise=0.1, weight_file = None):
+def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regularizers.l2(0.0001), weight_file = None):
         """ Method to declare the UNet model.
 
         Args:
@@ -11,7 +11,7 @@ def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regular
                 list of index of label channels, used for calculating the number of channels in model output.
             layer_count: (int, optional)
                 Count of kernels in first layer. Number of kernels in other layers grows with a fixed factor.
-            regularizers: keras.regularizers
+            regularizers: keras.regularizer
                 regularizers to use in each layer.
             weight_file: str
                 path to the weight file.
@@ -19,7 +19,6 @@ def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regular
 
         input_img = layers.Input(input_shape[1:], name='Input')
         pp_in_layer  = input_img
-#        pp_in_layer = layers.GaussianNoise(gaussian_noise)(input_img)
 #        pp_in_layer = layers.BatchNormalization()(pp_in_layer)
 
 

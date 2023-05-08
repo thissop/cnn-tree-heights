@@ -1,4 +1,4 @@
-def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, logging_dir:str=None):
+def load_train_val(ndvi_images:list, pan_images:list, annotations:list, boundaries:list, output_dir:str=None, batch_size:int=8):
    
     r'''
    
@@ -32,43 +32,45 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     from PIL import ImageFile
     from cnnheights.original_core.frame_utilities import FrameInfo, split_dataset
     from cnnheights.original_core.dataset_generator import DataGenerator
-    from cnnheights.original_core.config import normalize, batch_size, patch_size, input_image_channel, input_label_channel, input_weight_channel
-    ImageFile.LOAD_TRUNCATED_IMAGES = True
+    from cnnheights.original_core.config import normalize, patch_size, input_image_channel, input_label_channel, input_weight_channel
+    # ImageFile.LOAD_TRUNCATED_IMAGES = True --> THIS IS BAD! 
 
-    if logging_dir is not None:
-        patch_dir = os.path.join(logging_dir, f'patches{patch_size[0]}/')
+    if output_dir is not None:
+        patch_dir = os.path.join(output_dir, f'patches{patch_size[0]}/')
+        plot_dir = os.path.join(output_dir, 'plots')
     else:
         patch_dir = './patches{}'.format(patch_size[0])
+
+
    
     frames_json = os.path.join(patch_dir,'frames_list.json')
 
     # Read all images/frames into memory
     frames = []
+    meta_infos = []
 
     # problem is not in this for loop
     for i in range(len(ndvi_images)):
         ndvi_img = rasterio.open(ndvi_images[i])
+        meta_infos.append(ndvi_img.meta)
         pan_img = rasterio.open(pan_images[i])
         read_ndvi_img = ndvi_img.read()
         read_pan_img = pan_img.read()
         comb_img = np.concatenate((read_ndvi_img, read_pan_img), axis=0)
         comb_img = np.transpose(comb_img, axes=(1,2,0)) #Channel at the end
-        annotation_im = Image.open(annotations[i])
+        annotation_im = rasterio.open(annotations[i]).read(1)
         annotation = np.array(annotation_im)
        
-        weight_im = Image.open(boundaries[i])
+        weight_im = rasterio.open(boundaries[i]).read(1)
         weight = np.array(weight_im)
         f = FrameInfo(img=comb_img, annotations=annotation, weight=weight) # problem is not with how this is ordered
         frames.append(f)
    
-    # @THADDAEUS maybe problem is with generator? --> I don't think so...most likely prediction tbh??
-
-    training_frames, validation_frames, testing_frames  = split_dataset(frames, frames_json, patch_dir)
+    (training_frames, validation_frames) = split_dataset(frames, frames_json, patch_dir)
 
     annotation_channels = input_label_channel + input_weight_channel
     train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter = 'iaa').random_generator(batch_size, normalize = normalize) # set augmenter from ''iaa'' to None in case that's messing with things?
     val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
-    test_generator = DataGenerator(input_image_channel, patch_size, testing_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
     
     # do the for _ in range() here to check if issue is before or after	
     from cnnheights.original_core.visualize import display_images	
@@ -79,14 +81,14 @@ def load_train_test(ndvi_images:list, pan_images:list, annotations:list, boundar
     #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight	
     overlay = ann + wei	
     overlay = overlay[:,:,:,np.newaxis]	
-    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/debugging-take-3')	
-
-    return train_generator, val_generator, test_generator
+    display_images(np.concatenate((train_images,real_label), axis = -1), plot_path=plot_dir)
+    	
+    return train_generator, val_generator
 
 # not in train_cnn (unless the function call to generators causes the problem)
-def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:list,
-              epochs:int=200, training_steps:int=1000, use_multiprocessing:bool=False,
-              logging_dir:str=None):
+def train_model(train_generator, val_generator, 
+                epochs:int=2, batch_size:int=8, use_multiprocessing:bool=False,
+                logging_dir:str=None):
 
     r'''
    
@@ -119,22 +121,21 @@ def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:li
     crs : str
         e.g. EPSG:32628; should probably be ready from internal files.
 
+    if model is provided, skips training and just returns it. 
+
     '''
        
-    from cnnheights.training import load_train_test
     import os
-    from cnnheights.original_core.losses import tversky, accuracy, dice_coef, dice_loss, specificity, sensitivity
+    from cnnheights.original_core.loss import tf_tversky_loss, accuracy, dice_coef, dice_loss, specificity, sensitivity
     from cnnheights.original_core.optimizers import adaDelta
     import time
     from functools import reduce
     from cnnheights.original_core.UNet import UNet
     from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
-    from cnnheights.original_core.config import validation_image_count, batch_size, input_shape, input_image_channel, input_label_channel
-
-    train_generator, val_generator, test_generator = load_train_test(ndvi_images=ndvi_images, pan_images=pan_images, annotations=annotations, boundaries=boundaries, logging_dir=logging_dir)
+    from cnnheights.original_core.config import validation_image_count, input_shape, input_image_channel, input_label_channel
 
     OPTIMIZER = adaDelta
-    LOSS = tversky
+    LOSS = tf_tversky_loss
 
     # Only for the name of the model in the very end
     OPTIMIZER_NAME = 'AdaDelta'
@@ -191,9 +192,12 @@ def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:li
 
     # do training
     start = time.time()
+    # When training with input tensors such as TensorFlow data tensors, the default None is equal to the number of samples in your dataset divided by the batch size
+    
+    steps_per_epoch = max([int(epochs/batch_size), 2])
+
     loss_history = model.fit(train_generator,
-                            steps_per_epoch=training_steps,
-                            epochs=epochs,
+                            epochs=epochs, steps_per_epoch=steps_per_epoch, # SET THIS! 
                             validation_data=val_generator,
                             validation_steps=validation_image_count,
                             callbacks=callbacks_list, use_multiprocessing=use_multiprocessing) # the generator is not very thread safe
@@ -202,4 +206,4 @@ def train_cnn(ndvi_images:list, pan_images:list, annotations:list, boundaries:li
 
     print(f'Elapsed: {elapsed}; Average: {round(elapsed/100, 3)}')
 
-    return model, loss_history.history, test_generator
+    return model, loss_history.history
