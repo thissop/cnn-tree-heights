@@ -33,47 +33,6 @@ def mask_to_polygons(maskF, transform):
     This function creates vector polygons for all connected regions of pixels in the raster sharing a common pixel value. Optionally each polygon may be labeled with the pixel value in an attribute. Optionally a mask band can be provided to determine which pixels are eligible for processing.
     
     '''
-    def gdal_approach(tiff_path:str, output_path:str, crs:str): 
-        
-        from osgeo import gdal, ogr, osr
-
-        '''
-        
-        although this code will work itself in polygonizing predicted mask, 
-        a bunch of modifications throughout the rest of the pipeline would need to 
-        be implemented for the whole system to work with it...and I'm not sure if 
-        implementing those far reaching changes would be a wise thing to do. 
-        for example, it would add yet another layer of complexity to the data loader method, 
-        which would now have to track individual 256x256 tiff files for every single input/output
-        being used...this would require me to add steps to preprocessing to save 256x256 tiff "views"
-        of any input data that's larger than 256x256, which would add a lot of complexity to 
-        our approach. additionally, I would need to modify writeMaskToDisk() to make it more efficient 
-        so it doesn't resave this list of polygons back into the gdf that I originally read it from 
-        just to read it into a list to keep things consistent. 
-
-        '''
-
-        #  get raster datasource
-        src_ds = gdal.Open(tiff_path)
-        srcband = src_ds.GetRasterBand(1)
-        dst_layername = tiff_path.split('/')[-1].split('.')[0]
-        drv = ogr.GetDriverByName("ESRI Shapefile")
-        dst_ds = drv.CreateDataSource(output_path)
-
-        sp_ref = osr.SpatialReference()
-        sp_ref.SetFromUserInput(crs)
-
-        dst_layer = dst_ds.CreateLayer(dst_layername, srs = sp_ref )
-
-        fld = ogr.FieldDefn("HA", ogr.OFTInteger)
-        dst_layer.CreateField(fld)
-        dst_field = dst_layer.GetLayerDefn().GetFieldIndex("HA")
-
-        gdal.Polygonize( srcband, None, dst_layer, dst_field, [], callback=None )
-
-        all_polygons = list(gpd.read_file(filename=output_path)['geometry'])
-        # above is kinda redundant because we'll re-write it to file right after...but trying to keep things consistent. 
-
     def cv2_approach(mask): 
 
         #mask = mask.astype(np.uint8)
@@ -93,12 +52,7 @@ def mask_to_polygons(maskF, transform):
 
         # CV.CHAIN_APPROX_NONE: store all points around countour (basically, don't simplify shape)
         # what are CV_8UC1 images versus CV_32SC1 images? is this a CV_32SC1 image?
-
-        # doesn't have issue when predicting on binary 0,1 image...compare output polygons? ... feels so extra but I need to do it...need to shift my mentality 
-        # 
-        # mentality: what gets the job done (minimum viable product, whatever quiets the error messages)...versus diving into root of problems
-    
-        # additional growth: challenging assumptions...I'm assuming here that the issue is coming from the integers themselves, but what if it's just that after only one epoch of training the predictions are so large there are no contours?
+        #     
 
         # update on above: it still throws error about data type overflow when I run 5 epochs on 8 patches per epoch step, so I'm going to repeat above with 0,1
 

@@ -1,0 +1,29 @@
+Meeting Notes
+-------------
+
+> NIGHT: 
+
+> things to annotate: #4, #5, 10, 18, 
+
+> fix preprocessing vector rectangle from the wk2 april fix
+
+> make and send videos! 
+
+
+> update read me 
+
+> ask about scholarship and submit my end of stuff!
+
+> save and find polygons that aren't valid (save lines and polys gdf used in intersection between them)...can't have self interections!
+
+> we need an optional validation step before creating raster annotations in preprocessing so we know the polygons are good before making them rasters!
+
+> https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoSeries.is_valid.html
+
+> lines aren't long enough? how to scale them better? 
+
+> at this point, the main tasks are going to be making more annotations, training network, seeing how it predicts, and then making tweaks based on this
+
+> look into why ground truth is so far from true heights! (and why so many 0s)
+
+> make a bunch of annotations this week for him! 

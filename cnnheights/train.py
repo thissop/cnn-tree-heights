@@ -20,9 +20,6 @@ def load_train_val(ndvi_images:list, pan_images:list, annotations:list, boundari
     boundaries : list
         List of boundary files extracted by previous preprocessing step
 
-    logging_dir : str
-        the directory all the logging stuff should be saved into. defaults to none, which will make all the directories in directory that the python file that executes this function is run in.
-   
     '''
 
     import os
