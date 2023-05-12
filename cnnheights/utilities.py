@@ -26,7 +26,10 @@ def get_heights(annotations_gdf, d:float=7, cutlines_shp_file:str=None, cutline_
     annotation_lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(annotation_centroids.x, annotation_centroids.y)]
     annotation_lines_gdf = gpd.GeoDataFrame({'geometry':annotation_lines}, geometry='geometry', crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
          
-    annotations_gdf['geometry'] = [make_valid(i) for i in annotations_gdf['geometry']]
+    annotations_gdf.to_file('temp_annotations_gdf_debug_invalid.gpkg')
+    annotation_lines_gdf.to_file('temp_lines_gdf_debug_invalid.gpkg')
+
+    #annotations_gdf['geometry'] = [make_valid(i) for i in annotations_gdf['geometry']]
     #annotations_gdf['geometry'] = annotations_gdf.buffer(0) # DON'T DO THIS!
     
     annotation_shadow_lines = annotation_lines_gdf.intersection(annotations_gdf, align=False)
