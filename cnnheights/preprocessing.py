@@ -570,7 +570,7 @@ def better_preprocess(input_data_dir:str, output_data_dir:str):
 
 # CURRENT LOW LEVEL FUNCTIONS USED BY HIGH LEVEL PREPROCESS # 
 
-def get_cutline_data(epsg:str=None, north=None, east=None, predictions=None, cutlines_shp:str='/Users/yaroslav/Documents/Work/NASA/data/jesse/thaddaeus_cutline/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp'):
+def get_cutline_data(cutlines_shp:str, epsg:str=None, north=None, east=None, predictions=None):
     r'''
     
     return cutline information for an observation based on lat/long
