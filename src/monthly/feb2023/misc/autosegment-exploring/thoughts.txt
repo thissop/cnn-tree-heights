@@ -1,6 +1,0 @@
-can it segment out the shadow based on gradient so I don't have to? is there any way I can automate the process? 
-maybe i mark centroid of tree and square box around it. line perpendicular to azimuth and azimuth form shadow? 
-how we define that ambiguous zone is going to have a huge effect on our accuarcy. 
-- that being said, how are we going to associate error values on our test set predictions? 
-I think based on the code I've done this past week, the task is fairly trivial (we just need high quantity of high quality annotations; everything else follows. we will have a good computer, we have straightforward rules, etc.)
-ask Jesse via email if he thinks we could shoot for NeurIPS conference paper (abstract due in May) for this project. 

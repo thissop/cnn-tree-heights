@@ -1,3 +1,68 @@
+def get_heights(annotations_gdf, cutlines_shp_file:str=None, cutline_info:dict=None, d:float=7, exact_mode:bool=True):
+    r'''
+    
+    either cutlines_shp_file needs to be a defined file path, or cutline info needs to be a dictionary that would have been collected from the cutlines shp file.
+    cutline_info needs to have the following keys if it is used over the cutlines file: ['SUN_ELEV', 'SUN_AZ']
+
+    NOTES
+    -----
+
+    now has slower but exact way of constructing each dividing line such that each line is always exact length and will never be too short (it uses this approach if exact_mode=True)
+
+    '''
+    
+    from cnnheights.utilities import height_from_shadow
+    from cnnheights.preprocessing import get_cutline_data
+    import numpy as np
+    from shapely.geometry import LineString, box, Point
+    import geopandas as gpd
+    from cnnheights.utilities import height_from_shadow
+    import pandas as pd
+    import math
+
+    if cutlines_shp_file is None and cutline_info is None: 
+        raise Exception('')
+
+    cutline_info = get_cutline_data(predictions=annotations_gdf, cutlines_shp=cutlines_shp_file)
+    sun_az = cutline_info['SUN_AZ']
+    zenith_angle = cutline_info['SUN_ELEV']
+    if exact_mode: 
+        lines = []
+        for polygon in annotations_gdf['geometry']:
+            centroid = polygon.centroid
+            line_length = max(polygon.bounds[2] - polygon.bounds[0], polygon.bounds[3] - polygon.bounds[1]) * 2
+            angle = math.radians(sun_az)
+            endpoints = [(centroid.x - math.cos(angle) * line_length / 2, centroid.y - math.sin(angle) * line_length / 2),
+                        (centroid.x + math.cos(angle) * line_length / 2, centroid.y + math.sin(angle) * line_length / 2)]
+            line = LineString(endpoints)
+            closest_intersection_point = min([line.intersection(LineString([polygon.exterior.coords[i], polygon.exterior.coords[i+1]]))
+                                            for i in range(len(polygon.exterior.coords)-1) if line.intersects(LineString([polygon.exterior.coords[i], polygon.exterior.coords[i+1]]))],
+                                            key=centroid.distance)
+            line = LineString([closest_intersection_point, Point(2*centroid.x-closest_intersection_point.x, 2*centroid.y-closest_intersection_point.y)])
+            lines.append(line) # @THADDAEUS: MAKE SURE IN FUTURE THAT IT DOESNT'T NOT APPEND ANYTHING!
+
+        annotation_lines = gpd.GeoDataFrame({'geometry':lines}, crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
+
+    else: 
+        dy = np.abs(d/np.tan(np.radians(sun_az)))
+        annotation_centroids = annotations_gdf.centroid
+        annotation_lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(annotation_centroids.x, annotation_centroids.y)]
+    
+    annotation_lines_gdf = gpd.GeoDataFrame({'geometry':annotation_lines}, crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
+
+    #annotations_gdf['geometry'] = [make_valid(i) for i in annotations_gdf['geometry']]
+    #annotations_gdf['geometry'] = annotations_gdf.buffer(0) # DON'T DO THIS!
+    
+    annotation_shadow_lines = annotation_lines_gdf.intersection(annotations_gdf, align=False)
+
+    annotation_shadow_lengths = annotation_shadow_lines.length
+    annotations_shadow_heights = height_from_shadow(annotation_shadow_lengths, zenith_angle=zenith_angle)
+    
+    if type(annotations_shadow_heights) is pd.Series: 
+        annotations_shadow_heights = annotations_shadow_heights.to_numpy()
+
+    return annotations_shadow_heights
+
 def height_from_shadow(shadow_length:float, zenith_angle:float):
     r'''
     _get height from shadow length and zenith angle_
@@ -50,105 +115,3 @@ def zenith_from_location(time:str, lat:float, lon:float):
     zenith = 180-float(site.get_solarposition(time)['zenith']) # correct? 
 
     return zenith
-
-def shadows_from_annotations(annotations_gpkg, cutlines_shp:str, north:float, east:float, epsg:str, save_path:str=None, d:float=3):
-    r'''
-    _get shadow lengths and heights from annotations gpkg file, coordinate, and cutfile_
-
-    Arguments 
-    ---------
-
-    annotations_gpkg : `str`
-        path to annotations gpkg file 
-
-    NOTES 
-    -----
-
-    - get lat/long from center ish of the 
-
-    - uses lat/long to get container in cutlines file to reference to get azimuth angle from. 
-    - work with feather files (my preference) for saving these (e.g. save_path='./data.feather')...I love flexibility of .to_file(...)
-
-    TO DO 
-    -----
-    - fix lat long stuff?
-    - d is in meters because it's in the UTM projection? something to mention in paper how we update it for different regions (because inaccurate outside itself)
-
-    ''' 
-
-    import geopandas as gpd 
-    import numpy as np
-    from shapely.geometry import LineString, box
-    from cnnheights.utilities import longest_side
-    from cnnheights.preprocessing import get_cutline_data
-
-    annotations_gdf = gpd.read_file(annotations_gpkg)
-    annotations_gdf = annotations_gdf[annotations_gdf.geom_type != 'MultiPolygon']
-
-    annotations_gdf = annotations_gdf.set_crs(f'EPSG:{epsg}', allow_override=True)
-   
-    centroids = annotations_gdf.centroid    
-
-    cutline_info = get_cutline_data(north=north, east=east, epsg=epsg, cutlines_shp=cutlines_shp)
-
-    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
-    lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(centroids.x, centroids.y)]
-    lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
-
-    shadow_lines = lines_gdf.intersection(annotations_gdf, align=False)
-    shadow_lengths = shadow_lines.length
-
-    heights = height_from_shadow(shadow_lengths, zenith_angle=cutline_info['SUN_ELEV'])
-    #print(cutline_info['SUN_ELEV'])
-
-    bounds = annotations_gdf.bounds
-    dx = np.abs(np.abs(bounds['maxx'])-np.abs(bounds['minx']))
-    dy = np.abs(np.abs(bounds['maxy'])-np.abs(bounds['miny']))
-    dxy = np.max(np.array([dx,dy]).T, axis=1)
-    square_bounds = np.array([[minx, miny, minx+diff, miny+diff] for minx, miny, diff in zip(bounds['minx'], bounds['miny'], dxy)])    
-
-    d = {'shadow_geometry':annotations_gdf['geometry'], 
-         'centroids':centroids,
-         'bounds_geometry':[box(*i) for i in square_bounds],
-         'heights':heights, 
-         'line_geometries':shadow_lines, 
-         'lengths':shadow_lengths, 
-         'areas':annotations_gdf['geometry'].area, 
-         'perimeters':annotations_gdf['geometry'].length,
-         'diameters':gpd.GeoSeries(longest_side(annotations_gdf['geometry']))}
-    
-    shadows_gdf = gpd.GeoDataFrame(d, crs=f'EPSG:{epsg}', index=list(range(len(shadow_lengths))))
-    shadows_gdf = gpd.GeoDataFrame(shadows_gdf[shadows_gdf['shadow_geometry'] != None])
-
-    #print(shadows_gdf)
-
-    if save_path is not None: 
-        shadows_gdf.to_file(save_path, index=False)
-
-    return shadows_gdf
-
-def longest_side(polygons:list):
-    '''
-    Notes
-    -----
-        - This code is so inefficient...but will work for now. it calculates longest side length \
-        - polygons needs to be list of polygon objects 
-
-    '''
-    import numpy as np
-
-    longest_lengths = []
-    for polygon in polygons: 
-        coords = list([list(i) for i in polygon.exterior.coords])
-        coords = coords+[coords[0]]
-        lengths = []
-        for i in range(len(coords)-1): 
-            left = coords[i]
-            right = coords[i+1]
-            dist = np.sqrt((left[0]-right[0])**2+(left[1]-right[1])**2)
-            lengths.append(dist)
-        
-        longest_length = np.max(lengths)
-        longest_lengths.append(longest_length)
-
-    return longest_lengths

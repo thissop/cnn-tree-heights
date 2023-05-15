@@ -4,12 +4,8 @@
 
 ### Running main.py
 
-Easy as...
-
-1. Set `output_dir` argument to the directory on your machine that output should be saved to. 
-2. Set `epochs` and `training_steps` arguments.
-3. Run `main.py`!
-
+Running as background process (so you can close connection to remote):
+1. nohup python main.py > "/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/routine-nohup-log.txt" & 
 
 ### Installing the Library
 

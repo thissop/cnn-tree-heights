@@ -1,9 +1,7 @@
 #    Author: Ankit Kariryaa, University of Bremen
 
-import imgaug as ia
 from imgaug import augmenters as iaa
 import numpy as np
-
 
 # Sometimes(0.5, ...) applies the given augmenter in 50% of all cases,
 # e.g. Sometimes(0.5, GaussianBlur(0.3)) would blur roughly every second image.
@@ -88,6 +86,7 @@ class DataGenerator():
             frame = self.frames[fn]
             patch = frame.random_patch(self.patch_size, normalize)
             patches.append(patch)
+        
         data = np.array(patches)
 
         img = data[..., self.input_image_channel]
@@ -102,11 +101,12 @@ class DataGenerator():
         Args:
             BATCH_SIZE (int): Number of patches to generate in each yield (sampled independently).
             normalize (float): Probability with which a frame is normalized.
+        
         """
         seq = imageAugmentationWithIAA()
 
         while True:
-            X, y = self.random_patch(BATCH_SIZE, normalize)
+            X, y = self.random_patch(BATCH_SIZE, normalize) # @ THADDAEUS: CHECK THIS NORMALIZATION FOR POTENTIAL ERRORS IN FUTURE!!
             if self.augmenter == 'iaa':
                 seq_det = seq.to_deterministic()
                 X = seq_det.augment_images(X)
@@ -127,9 +127,34 @@ class DataGenerator():
                 # y would have two channels, i.e. annotations and weights.
                 ann =  y[...,[0]]
                 #boundaries have a weight of 10 other parts of the image has weight 1
-                weights = y[...,[1]]
+                weights = y[...,[1]] 
                 weights[weights>=0.5] = 10
                 weights[weights<0.5] = 1
 
-                ann_joint = np.concatenate((ann,weights), axis=-1)
+                ann_joint = np.concatenate((ann, weights), axis=-1)
+
+                '''
+                print(X.shape, ann_joint.shape)
+                import matplotlib.pyplot as plt 
+
+                fig, axs = plt.subplots(2,4, figsize=(6,6))
+
+                print(X[0][0])
+
+                axs[0,0].imshow(X[0][0])
+                axs[0,1].imshow(X[0][1])
+                axs[0,2].imshow(X[1][0])
+                axs[0,3].imshow(X[1][1])
+
+                axs[0,0].set(ylabel='X')
+
+                axs[1,0].imshow(ann_joint[0][0])
+                axs[1,1].imshow(ann_joint[0][1])
+                axs[1,2].imshow(ann_joint[1][0])
+                axs[1,3].imshow(ann_joint[1][1])
+                axs[1,0].set(ylabel='ann_joint')
+
+                plt.savefig('/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/plots-for-debugging/single/ann_joint_X.png')
+                '''
+                
                 yield X, ann_joint

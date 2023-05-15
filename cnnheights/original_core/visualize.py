@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt  # plotting tools
 from matplotlib.patches import Polygon
-
-def display_images(img, titles=None, cmap=None, norm=None, interpolation=None):
+def display_images(img, plot_path:str='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/temp/tensorflow/plots'):
     """Display the given set of images, optionally with titles.
     images: array of image tensors in Batch * Height * Width * Channel format.
     titles: optional. A list of titles to display with each image.
@@ -9,13 +8,19 @@ def display_images(img, titles=None, cmap=None, norm=None, interpolation=None):
     norm: Optional. A Normalize instance to map values to colors.
     interpolation: Optional. Image interpolation to use for display.
     """
+    import matplotlib.pyplot as plt 
+    import os 
+
     cols = img.shape[-1]
     rows = img.shape[0]
-    titles = titles if titles is not None else [""] * (rows*cols)
 
-    plt.figure(figsize=(14, 14 * rows // cols))
+    fig, axs = plt.subplots(rows, cols, figsize=(14, 14 * rows // cols))
     for i in range(rows):
         for j in range(cols):
-            plt.subplot(rows, cols, (i*cols) + j + 1)
-            plt.axis('off')
-            plt.imshow(img[i,...,j], cmap=cmap, norm=norm, interpolation=interpolation)
+            axs[i,j].axis('off')
+            axs[i,j].imshow(img[i,...,j])
+
+    plt.tight_layout()
+    if '.' not in plot_path: 
+        plot_path = os.path.join(plot_path, 'display_image_output.pdf')
+    plt.savefig(plot_path)
