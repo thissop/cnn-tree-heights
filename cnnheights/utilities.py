@@ -1,38 +1,60 @@
-def get_heights(annotations_gdf, d:float=7, cutlines_shp_file:str=None, cutline_info:dict=None):
+def get_heights(annotations_gdf, cutlines_shp_file:str=None, cutline_info:dict=None, d:float=7, exact_mode:bool=True):
     r'''
     
     either cutlines_shp_file needs to be a defined file path, or cutline info needs to be a dictionary that would have been collected from the cutlines shp file.
     cutline_info needs to have the following keys if it is used over the cutlines file: ['SUN_ELEV', 'SUN_AZ']
+
+    NOTES
+    -----
+
+    now has slower but exact way of constructing each dividing line such that each line is always exact length and will never be too short (it uses this approach if exact_mode=True)
 
     '''
     
     from cnnheights.utilities import height_from_shadow
     from cnnheights.preprocessing import get_cutline_data
     import numpy as np
-    from shapely.geometry import LineString, box
+    from shapely.geometry import LineString, box, Point
     import geopandas as gpd
     from cnnheights.utilities import height_from_shadow
     import pandas as pd
-    from shapely.validation import make_valid
+    import math
 
     if cutlines_shp_file is None and cutline_info is None: 
         raise Exception('')
 
     cutline_info = get_cutline_data(predictions=annotations_gdf, cutlines_shp=cutlines_shp_file)
-    dy = np.abs(d/np.tan(np.radians(cutline_info['SUN_AZ'])))
+    sun_az = cutline_info['SUN_AZ']
     zenith_angle = cutline_info['SUN_ELEV']
+    if exact_mode: 
+        lines = []
+        for polygon in annotations_gdf['geometry']:
+            centroid = polygon.centroid
+            line_length = max(polygon.bounds[2] - polygon.bounds[0], polygon.bounds[3] - polygon.bounds[1]) * 2
+            angle = math.radians(sun_az)
+            endpoints = [(centroid.x - math.cos(angle) * line_length / 2, centroid.y - math.sin(angle) * line_length / 2),
+                        (centroid.x + math.cos(angle) * line_length / 2, centroid.y + math.sin(angle) * line_length / 2)]
+            line = LineString(endpoints)
+            closest_intersection_point = min([line.intersection(LineString([polygon.exterior.coords[i], polygon.exterior.coords[i+1]]))
+                                            for i in range(len(polygon.exterior.coords)-1) if line.intersects(LineString([polygon.exterior.coords[i], polygon.exterior.coords[i+1]]))],
+                                            key=centroid.distance)
+            line = LineString([closest_intersection_point, Point(2*centroid.x-closest_intersection_point.x, 2*centroid.y-closest_intersection_point.y)])
+            lines.append(line) # @THADDAEUS: MAKE SURE IN FUTURE THAT IT DOESNT'T NOT APPEND ANYTHING!
 
-    annotation_centroids = annotations_gdf.centroid
-    annotation_lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(annotation_centroids.x, annotation_centroids.y)]
-    annotation_lines_gdf = gpd.GeoDataFrame({'geometry':annotation_lines}, geometry='geometry', crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
-         
-    annotations_gdf.to_file('temp_annotations_gdf_debug_invalid.gpkg')
-    annotation_lines_gdf.to_file('temp_lines_gdf_debug_invalid.gpkg')
+        annotation_lines = gpd.GeoDataFrame({'geometry':lines}, crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
+
+    else: 
+        dy = np.abs(d/np.tan(np.radians(sun_az)))
+        annotation_centroids = annotations_gdf.centroid
+        annotation_lines = [LineString([(x-d, y+dy), (x+d, y-dy)]) for x, y in zip(annotation_centroids.x, annotation_centroids.y)]
+    
+    annotation_lines_gdf = gpd.GeoDataFrame({'geometry':annotation_lines}, crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
 
     #annotations_gdf['geometry'] = [make_valid(i) for i in annotations_gdf['geometry']]
     #annotations_gdf['geometry'] = annotations_gdf.buffer(0) # DON'T DO THIS!
     
     annotation_shadow_lines = annotation_lines_gdf.intersection(annotations_gdf, align=False)
+
     annotation_shadow_lengths = annotation_shadow_lines.length
     annotations_shadow_heights = height_from_shadow(annotation_shadow_lengths, zenith_angle=zenith_angle)
     

@@ -106,7 +106,7 @@ def writeMaskToDisk(detected_mask, detected_meta, save_path:str, write_as_type =
 
     res = mask_to_polygons(detected_mask, detected_meta['transform'])
 
-    d = {'geometry':[i for i in res if i.type == 'Polygon']}
+    d = {'geometry':[i for i in res if i.type == 'Polygon' and i.is_valid]}
     gdf = gpd.GeoDataFrame(d, crs=detected_meta['crs'])
     #gdf = gdf[gdf.geom_type != 'MultiPolygon'] # NOTE THIS FOR FUTURE! HAD TO TAKE OUT GDF!!
     gdf.to_file(save_path)#, schema=schema)
@@ -150,8 +150,10 @@ def heights_analysis(predicted_gdf, cutlines_shp_file:str, true_gdf=None, d:floa
 
     predicted_heights = get_heights(annotations_gdf=predicted_gdf, cutlines_shp_file=cutlines_shp_file)
     
+    print('moved past get_heights for predicted annotations')
     if true_gdf is not None: 
-    
+        
+        print('true gdf is not none')
         true_heights = get_heights(annotations_gdf=true_gdf, cutlines_shp_file=cutlines_shp_file)
 
         for i, predicted_shadow in enumerate(predicted_gdf['geometry']): 

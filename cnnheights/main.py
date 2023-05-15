@@ -76,8 +76,6 @@ def main(input_data_dir:str, output_dir:str,
     from cnnheights.plotting import plot_height_histograms, plot_train_history
     #warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 
-    model_paradigms = ['tensorflow-1']
-
     train_plot_dir = os.path.join(output_dir, 'plots')
     test_output_dir = os.path.join(output_dir, 'test')
     test_output_predictions_dir = os.path.join(test_output_dir, 'predictions')
@@ -144,7 +142,6 @@ def main(input_data_dir:str, output_dir:str,
             heights_gdf = heights_analysis(predicted_gdf=prediction_dict['gdf'], true_gdf=true_gdf, cutlines_shp_file='/ar1/PROJ/fjuhsd/personal/thaddaeus/github/cnn-tree-heights/SSAr2_32628_GE01-QB02-WV02-WV03-WV04_PAN_NDVI_010_003_mosaic_cutlines.shp') 
 
             #from shapely.validation import make_valid
-
             #valid_shape = make_valid(invalid_shape)
 
             heights_gdf.to_file(os.path.join(test_output_dir, f'heights_analysis_output_{idx}.gpkg'))
@@ -184,11 +181,9 @@ def main(input_data_dir:str, output_dir:str,
 
         plot_predictions(gdf=predictions[0]['gdf'])
 
-
 if __name__ == "__main__": 
-    
     input_data_dir = 'data/test-dataset' 
     output_dir = 'temp/tensorflow' 
     test_input_dir = 'data/standalone-fake'
     main(input_data_dir=input_data_dir, output_dir=output_dir, test_input_dir=test_input_dir, 
-         num_epochs=4) 
+         num_epochs=1) 
