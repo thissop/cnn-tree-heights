@@ -1,26 +1,22 @@
+#NOTE(Jesse): The premise is to generate binary raster masks of the geometry annotations.  We also provide another mask
+# that segments the space between nearby geometries (they are scaled and any overlap is considered "nearby"), which is used during training to aid in closed canopy disaggregation.
 
-from time import time
-start = time()
+# Instead of providing 2 separate files or bands of binary masks, they are interwoven into the same stream.  Values of 1 corrospond to geometry pixels
+# and values of 2 corrospond to overlap pixels.  0 means "neither geometry nor overlap" and is marked as "no data" in the GDAL band.
+training_data_fp = "/path/to/training/annotations"
 
-from osgeo import gdal
-gdal.UseExceptions()
-
-gdal.SetConfigOption("GDAL_DISABLE_READDIR_ON_OPEN", "TRUE")
-gdal.SetConfigOption("GDAL_NUM_THREADS", "ALL_CPUS")
-gdal.SetConfigOption("NUM_THREADS", "ALL_CPUS")
-
-def compute_tree_annotation_and_boundary_raster(vector_fp):
-    print(vector_fp)
-
-    #NOTE(Jesse): Find an accompanying raster filename based on the vector_fp.
+def PROCESS_compute_tree_annotation_and_boundary_raster(vector_fp):
+    #NOTE(Jesse): Find an accompanying raster filename based on the vector_fp to geolocate the result masks.
     vector_fp_split = vector_fp.split('/')
     vector_fn = vector_fp_split[-1]
     raster_fp_base = "/".join(vector_fp_split[:-1]) + "/"
     vector_fn = vector_fn.split('.')[0]
     v_id = vector_fn.split('_')[-1]
-    raster_fp = raster_fp_base + f"extracted_ndvi_{int(v_id)}.png"
+    assert v_id.isdigit(), f"{vector_fn} the ID number was expected after the last '_' in the file name."
 
-    raster_disk_ds = gdal.Open(raster_fp)
+    #TODO(Jesse): Remove PNG support and use the pan_ndvi_cutout file name convention
+
+    raster_disk_ds = gdal.Open(raster_fp_base + f"extracted_ndvi_{int(v_id)}.png")
 
     #NOTE(Jesse): Create in memory raster of the same geospatial extents as the mask for high performance access.
     raster_mem_ds = gdal.GetDriverByName("MEM").Create('', xsize=raster_disk_ds.RasterXSize, ysize=raster_disk_ds.RasterYSize, bands=1, eType=gdal.GDT_Byte)
@@ -66,31 +62,60 @@ def compute_tree_annotation_and_boundary_raster(vector_fp):
 
     #NOTE(Jesse): Save the composite array out to disk.
     disk_create_options = ['COMPRESS=ZSTD', 'ZSTD_LEVEL=1', 'INTERLEAVE=BAND', 'Tiled=YES', 'NUM_THREADS=ALL_CPUS', 'SPARSE_OK=True', 'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256']
-    raster_disk_ds = gdal.GetDriverByName("GTiff").Create(raster_fp_base + f"annotation_and_boundary_{v_id}.tif", xsize=raster_mem_ds.RasterXSize, ysize=raster_mem_ds.RasterYSize, bands=1, eType=gdal.GDT_Byte, options=disk_create_options)
-    raster_disk_ds.GetRasterBand(1).SetNoDataValue(255)
+    result_fp = raster_fp_base + f"annotation_and_boundary_{v_id}.tif"
+    raster_disk_ds = gdal.GetDriverByName("GTiff").Create(result_fp, xsize=raster_mem_ds.RasterXSize, ysize=raster_mem_ds.RasterYSize, bands=1, eType=gdal.GDT_Byte, options=disk_create_options)
+    raster_disk_ds.GetRasterBand(1).SetNoDataValue(0) #NOTE(Jesse): 0 is actually "valid" but for QGIS visualization, we want it to be transparent.
     raster_disk_ds.SetGeoTransform(raster_mem_ds.GetGeoTransform())
     raster_disk_ds.SetProjection(raster_mem_ds.GetProjection())
     raster_disk_ds.GetRasterBand(1).WriteArray(composite_arr)
     del raster_disk_ds
 
+    return result_fp
+
+from osgeo import gdal
+gdal.UseExceptions()
+
+gdal.SetConfigOption("GDAL_DISABLE_READDIR_ON_OPEN", "TRUE")
+gdal.SetConfigOption("GDAL_NUM_THREADS", "ALL_CPUS")
+gdal.SetConfigOption("NUM_THREADS", "ALL_CPUS")
+
+#NOTE(Jesse): The functions and imports above have to be global and not barred as below to be available for spawned processes.
+# But, we don't want them to import MP Pool nor run main at all.  This is less about restricting shared code use and more about
+# kosher MP semantics.
 
 if __name__ == "__main__":
     from multiprocessing import Pool
 
     def main():
+        from time import time
+        start = time()
+
         from os import listdir
+        from os.path import join, normpath
 
-        #NOTE(Jesse): Find training data.  We can later normalize where they are and their naming conventions.
+        global training_data_fp
 
-        training_data_fp = "/Users/jrmeyer3/Desktop/cnn-input/"
+        training_data_fp = normpath(training_data_fp)
+
         training_files = listdir(training_data_fp)
-        training_files = [training_data_fp + f for f in training_files if f.endswith(".gpkg")]
+        training_files = [join(training_data_fp, f) for f in training_files if f.endswith(".gpkg")]
+
+        assert len(training_files) > 0, f"No training .gpkg database files were found in {training_data_fp}"
 
         with Pool() as p:
-            p.map(compute_tree_annotation_and_boundary_raster, training_files, chunksize=1)
+            fps = p.map(PROCESS_compute_tree_annotation_and_boundary_raster, training_files, chunksize=1)
+
+        vrt_dsses = [None] * len(fps)
+        for i, fp in enumerate(fps):
+            vrt_dsses[i] = gdal.Open(fp)
+
+        vrt_ds = gdal.BuildVRT(join(training_data_fp, "annotation_and_boundary.vrt"), vrt_dsses)
+        vrt_ds = None
+
+        vrt_dsses = None
+
+        end = time()
+        elapsed_minutes = (end - start) / 60.0
+        print(elapsed_minutes)
 
     main()
-
-    end = time()
-    elapsed_minutes = (end - start) / 60.0
-    print(elapsed_minutes)
