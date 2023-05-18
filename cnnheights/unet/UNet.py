@@ -74,5 +74,9 @@ def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regular
         seg_model = models.Model(inputs=[input_img], outputs=[d])
         if weight_file:
             seg_model.load_weights(weight_file)
-        seg_model.summary()
+
+        debug = False
+        if debug:
+            seg_model.summary()
+
         return seg_model

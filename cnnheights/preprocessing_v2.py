@@ -3,6 +3,9 @@
 
 # Instead of providing 2 separate files or bands of binary masks, they are interwoven into the same stream.  Values of 1 corrospond to geometry pixels
 # and values of 2 corrospond to overlap pixels.  0 means "neither geometry nor overlap" and is marked as "no data" in the GDAL band.
+
+# This script intends to injest data from the stage_0 script.
+
 training_data_fp = "/path/to/training/annotations"
 
 def PROCESS_compute_tree_annotation_and_boundary_raster(vector_fp):

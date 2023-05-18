@@ -11,11 +11,8 @@ normalize = 1
 # Shape of the input data, height*width*channel; Here channels are NVDI and Pan
 input_shape = (256,256,2)
 input_image_channel = [0,1]
-input_label_channel = [2]
-input_weight_channel = [3]
+input_label_channel = 2
+input_weight_channel = 3
 
-# number of validation images to use
-validation_image_count = 200
-
-# 
-batch_size = 8 
+#
+batch_size = 8
