@@ -1,14 +1,14 @@
 from tensorflow.keras import models, layers
 from tensorflow.keras import regularizers
 
-def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regularizers.l2(0.0001), weight_file = None):
+def UNet(input_shape, input_label_channel_count:int, layer_count=64, regularizers = regularizers.l2(0.0001), weight_file = None):
         """ Method to declare the UNet model.
 
         Args:
             input_shape: tuple(int, int, int, int)
                 Shape of the input in the format (batch, height, width, channels).
-            input_label_channel: list([int])
-                list of index of label channels, used for calculating the number of channels in model output.
+            input_label_channel_count: int
+                the number of channels in model output.
             layer_count: (int, optional)
                 Count of kernels in first layer. Number of kernels in other layers grows with a fixed factor.
             regularizers: keras.regularizer
@@ -69,7 +69,7 @@ def UNet(input_shape,input_label_channel, layer_count=64, regularizers = regular
         c9 = layers.Conv2D(1*layer_count, (3, 3), activation='relu', padding='same')(u9)
         c9 = layers.Conv2D(1*layer_count, (3, 3), activation='relu', padding='same')(c9)
 
-        d = layers.Conv2D(len(input_label_channel), (1, 1), activation='sigmoid', kernel_regularizer= regularizers)(c9)
+        d = layers.Conv2D(input_label_channel_count, (1, 1), activation='sigmoid', kernel_regularizer= regularizers)(c9)
 
         seg_model = models.Model(inputs=[input_img], outputs=[d])
         if weight_file:

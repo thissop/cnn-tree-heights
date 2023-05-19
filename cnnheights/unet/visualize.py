@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt  # plotting tools
 from matplotlib.patches import Polygon
-def display_images(img, plot_path:str):
+def display_images(img, plot_path:str=None):
     """Display the given set of images, optionally with titles.
     images: array of image tensors in Batch * Height * Width * Channel format.
     titles: optional. A list of titles to display with each image.
@@ -16,9 +16,13 @@ def display_images(img, plot_path:str):
 
     fig, axs = plt.subplots(rows, cols, figsize=(14, 14 * rows // cols))
     for i in range(rows):
-        for j in range(cols):
-            axs[i,j].axis('off')
-            axs[i,j].imshow(img[i,...,j])
+        if cols > 1:
+            for j in range(cols):
+                axs[i,j].axis('off')
+                axs[i,j].imshow(img[i,...,j])
+        else:
+            axs[i].axis('off')
+            axs[i].imshow(img[i,...]) 
 
     plt.tight_layout()
     if plot_path:

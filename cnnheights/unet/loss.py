@@ -6,7 +6,7 @@ import tensorflow.keras.backend as K
 import numpy as np
 import tensorflow as tf
 
-def tf_tversky_loss(y_true, y_pred, weights=None, alpha=0.6, beta=0.4):
+def tversky(y_true, y_pred, weights=None, alpha=0.6, beta=0.4):
     """
     Function to calculate the Tversky loss for imbalanced data
     :param prediction: the logits

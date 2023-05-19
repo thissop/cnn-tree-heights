@@ -1,10 +1,8 @@
 #NOTE(Jesse): The premise of this script is to train a CNN with the provided prepared training data.
 # The inputs are assumed to have been produced using the stage_1 script
 
-UNTESTED
-
-training_data_fp = "/path/to/training/data"
-model_fp = None #NOTE(Jesse): Set this to the directory of a previously trained UNET for post-training, otherwise we output to the training data fp the trained model.
+training_data_fp = "C:\\Users\\jrmeyer3\\Documents\\cnn-input"
+model_weights_fp = "C:\\Users\\jrmeyer3\\Documents\\cnn-input\\unet_cnn_model_weights.h5" #NOTE(Jesse): Set this to the directory of a previously trained UNET for post-training, otherwise we output to the training data fp the trained model.
 
 if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
@@ -12,24 +10,26 @@ if __name__ != "__main__":
 
 def main():
     from time import time
-    start = time / 60
+    start = time() / 60
 
     from os import listdir
-    from os.path import join, isdir, isfile
+    from os.path import join, isdir, isfile, normpath
 
     global training_data_fp
-    global model_fp
+    global model_weights_fp
 
     #NOTE(Jesse): Early failure for bad inputs.
+    training_data_fp = normpath(training_data_fp)
     assert isdir(training_data_fp)
 
-    if model_fp:
-        assert isfile(model_fp), model_fp
+    if model_weights_fp:
+        model_weights_fp = normpath(model_weights_fp)
+        assert isfile(model_weights_fp), model_weights_fp
 
     import rasterio
     from json import dump
     from unet.frame_utilities import FrameInfo
-    from numpy import concatenate, transpose, newaxis
+    from numpy import newaxis, zeros, uint16, float32, arange, concatenate
     from numpy.random import shuffle
 
     training_files = listdir(training_data_fp)
@@ -45,7 +45,16 @@ def main():
         if tf.startswith('.'): #NOTE(Jesse): Skip hidden files
             continue
 
+        if '.' not in tf:
+            continue #NOTE(Jesse): Skip directories
+
         if tf.endswith('.vrt'):
+            continue
+
+        if tf.endswith('.json'):
+            continue
+
+        if tf.endswith('.h5'):
             continue
 
         tf_fn = tf.split('.')[0]
@@ -64,36 +73,49 @@ def main():
         boundary_img = rasterio.open(boundary_fp).read(1)
         annotation_img = rasterio.open(annotation_fp).read(1)
 
-        comb_img = concatenate((ndvi_img, pan_img), axis=0)
-        comb_img = transpose(comb_img, axes=(1,2,0)) #Channel at the end
+        #TODO(Jesse): As referred to above, support the 1024x1024 uint16 pan_ndvi version.
+        assert pan_img.shape == (1056, 1056), f"Expected shape of 1056x1056, got {pan_img.shape}"
+        assert pan_img.shape == ndvi_img.shape == boundary_img.shape == annotation_img.shape
 
-        frames.append(FrameInfo(img=comb_img, annotations=annotation_img, weight=boundary_img))
+        arr = zeros((1056, 1056, 2), dtype=float32)
+        arr[..., 0] = ndvi_img
+        arr[..., 1] = pan_img
+
+        frames.append(FrameInfo(img=arr, annotations=annotation_img, weight=boundary_img))
     assert len(frames) > 0
 
+    print("Loading Tensorflow")
     from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
     from unet.dataset_generator import DataGenerator
     from unet.config import input_shape, normalize, patch_size, input_image_channel, input_label_channel, input_weight_channel, batch_size
-    from unet.loss import tf_tversky_loss, dice_coef, dice_loss, specificity, sensitivity
+    from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
     from unet.UNet import UNet
     from unet.optimizers import adaDelta
     from keras.models import load_model
 
-    training_frames_count = int(len(frames) * 0.8)
-    shuffled_indices = shuffle(range(len(frames)))
-    training_frames = frames[shuffled_indices[:training_frames_count]]
-    validation_frames = frames[shuffled_indices[training_frames_count:]]
+    shuffled_indices = arange(len(frames))
+    shuffle(shuffled_indices)
 
-    frames_fp = join(training_data_fp,'frames_list.json')
-    with open(frames_fp, 'w') as f:
-        dump({
-        'training_frames': training_frames,
-        'validation_frames': validation_frames
-        }, f)
+    training_frames_count = int((len(frames) * 0.8) + 0.5)
+    training_frame_indices   = [i for i in shuffled_indices[:training_frames_count]]
+    validation_frame_indices = [i for i in shuffled_indices[training_frames_count:]]
 
+    if False:
+        #TODO(Jesse): These frame lists are meaningless.  They don't record which image they are from, nor which patch subset is ultimately fed to the CNN.
+        # The prior is vital, the latter is maybe situationally useful.
+        # So, remember which *image* the frame index refers to. 
+        frames_fp = join(training_data_fp, 'frames_list.json')
+        with open(frames_fp, 'w') as f:
+            dump({
+            'training_frames_indices': training_frame_indices,
+            'validation_frames_indices': validation_frame_indices
+            }, f)
+
+    #TODO(Jesse): I don't know why the DataGenerator needs a separate list of indices and the whole frames list.  Just send the frames it needs.
     annotation_channels = [input_label_channel, input_weight_channel]
     training_augmenter = None #'iaa' #NOTE(Jesse): We'll see if iaa helps later on.
-    train_generator = DataGenerator(input_image_channel, patch_size, training_frames, frames, annotation_channels, augmenter =training_augmenter).random_generator(batch_size, normalize = normalize)
-    val_generator = DataGenerator(input_image_channel, patch_size, validation_frames, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
+    train_generator = DataGenerator(input_image_channel, patch_size, training_frame_indices, frames, annotation_channels, augmenter =training_augmenter).random_generator(batch_size, normalize = normalize)
+    val_generator = DataGenerator(input_image_channel, patch_size, validation_frame_indices, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
 
     debug = True
     if debug:
@@ -107,29 +129,40 @@ def main():
         overlay = overlay[:,:,:,newaxis]
         display_images(concatenate((train_images, real_label), axis = -1))
 
-    model = None
-    if model_fp:
-        #TODO(Jesse): Replace load_model with passing a weights file to UNet()
-        model = load_model(model_fp, custom_objects={'tversky':tf_tversky_loss,
-                                                     'dice_coef':dice_coef, 'dice_loss':dice_loss,
-                                                     'specificity':specificity, 'sensitivity':sensitivity})
+    model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
+    post_train = False
+    if model_weights_fp:
+        post_train = True
     else:
-        model_fp = join(training_data_fp, "unet_cnn_model.h5")
-        model = UNet([batch_size, *input_shape], input_label_channel)
+        model_weights_fp = join(training_data_fp, "unet_cnn_model_weights.h5")
 
-    model.compile(optimizer=adaDelta, loss=tf_tversky_loss, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
+    model.compile(optimizer=adaDelta, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
 
-    checkpoint = ModelCheckpoint(model_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only = False)
-    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
+    checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only = True)
+    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, 
+                              embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
 
     print("Start training")
     model.fit(train_generator,
-                epochs=2, steps_per_epoch=10,
+                epochs=10, steps_per_epoch=25,
+                initial_epoch = 9 if post_train else 0,
                 validation_data=val_generator,
-                validation_steps=len(validation_frames) * 10,
+                validation_steps=len(validation_frame_indices) * 10,
                 callbacks=[checkpoint, tensorboard], use_multiprocessing=False)
 
     stop = time() / 60
     print(f"Took {stop - start} minutes.")
+
+    if debug:
+        batch = zeros((batch_size, 256, 256, 2), dtype=float32)
+        for i in range(batch_size):
+            batch[i::] = frames[i].img[0:256, 0:256, :]
+
+        predictions = model.predict(batch)
+        for p in predictions:
+            p[p > 0.5] = 1
+            p[p <= 0.5] = 0
+
+        display_images(predictions)
 
 main()
