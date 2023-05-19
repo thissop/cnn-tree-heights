@@ -91,19 +91,18 @@ def main():
     from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
     from unet.UNet import UNet
     from unet.optimizers import adaDelta
-    from keras.models import load_model
 
     shuffled_indices = arange(len(frames))
     shuffle(shuffled_indices)
 
     training_frames_count = int((len(frames) * 0.8) + 0.5)
-    training_frame_indices   = [i for i in shuffled_indices[:training_frames_count]]
-    validation_frame_indices = [i for i in shuffled_indices[training_frames_count:]]
+    training_frame_indices   = shuffled_indices[:training_frames_count]
+    validation_frame_indices = shuffled_indices[training_frames_count:]
 
     if False:
         #TODO(Jesse): These frame lists are meaningless.  They don't record which image they are from, nor which patch subset is ultimately fed to the CNN.
         # The prior is vital, the latter is maybe situationally useful.
-        # So, remember which *image* the frame index refers to. 
+        # So, remember which *image* the frame index refers to.
         frames_fp = join(training_data_fp, 'frames_list.json')
         with open(frames_fp, 'w') as f:
             dump({
@@ -139,7 +138,7 @@ def main():
     model.compile(optimizer=adaDelta, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
 
     checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only = True)
-    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False, 
+    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False,
                               embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
 
     print("Start training")
