@@ -4,7 +4,6 @@ tile_fp = "/path/to/tile.tif"
 out_fp = "/path/to/destination/"
 model_weights_fp = "/path/to/weights.h5"
 
-
 if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
     exit()
