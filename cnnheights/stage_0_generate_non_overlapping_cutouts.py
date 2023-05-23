@@ -13,12 +13,10 @@ if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
     exit()
 
-from time import time
-begin = time() / 60
-
 #NOTE(Jesse): These are the two inputs you must configure, and both must already exist.  We do not create directories on your behalf.
 mosaic_fp = "/path/to/mosaic.tif" #NOTE(Jesse): This is the filepath to the mosaic image from which cutouts are selected.
 cutout_fp = "/path/to/cutouts" #NOTE(Jesse): Directory to store selected cutouts.
+bounds_to_generate = 2
 
 def is_overlapping_1d(range1, range2):
     return range1[0] <= range2[1] & range1[1] >= range2[0]
@@ -69,6 +67,7 @@ def main():
 
     global cutout_fp
     global mosaic_fp
+    global bounds_to_generate
 
     cutout_fp = normpath(cutout_fp)
     mosaic_fp = normpath(mosaic_fp)
@@ -90,10 +89,12 @@ def main():
 
     extent_xy = mosaic_xy - cutout_xy
     while True:
-        bounds_xy = randint(0, extent_xy, (10, 2))
+        bounds_xy = randint(0, extent_xy, (bounds_to_generate * 2, 2))
         bounds_xy = filter_overlapped_bounds(bounds_xy)
-        if len(bounds_xy) >= 10:
+        if len(bounds_xy) >= bounds_to_generate:
             break
+
+    bounds_xy = bounds_xy[:bounds_to_generate]
 
     vrt_dsses = [None] * len(bounds_xy)
     with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN=True, GDAL_NUM_THREADS="ALL_CPUS", NUM_THREADS="ALL_CPUS"):
@@ -122,6 +123,9 @@ def main():
     vrt_ds = gdal.BuildVRT(join(cutout_fp, "cutout.vrt"), vrt_dsses)
     vrt_ds = None
     vrt_dsses = None
+
+from time import time
+begin = time() / 60
 
 main()
 

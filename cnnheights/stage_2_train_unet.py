@@ -155,7 +155,7 @@ def main():
     if debug:
         batch = zeros((batch_size, 256, 256, 2), dtype=float32)
         for i in range(batch_size):
-            batch[i::] = frames[i].img[0:256, 0:256, :]
+            batch[i::] = frames[i].img[0:256, 0:256, :] #TODO(Jesse): Use newer input specification & use standardize
 
         predictions = model.predict(batch)
         for p in predictions:

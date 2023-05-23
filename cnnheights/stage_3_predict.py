@@ -10,7 +10,7 @@ if __name__ != "__main__":
 
 def main():
     from os.path import isfile, isdir, normpath, join
-    from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze
+    from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, isnan
     from osgeo import gdal
 
     gdal.UseExceptions()
@@ -24,13 +24,13 @@ def main():
     global model_weights_fp
     global out_fp
 
-    assert isfile(tile_fp), tile_fp
-    assert isfile(model_weights_fp), model_weights_fp
-    assert isdir(out_fp), out_fp
-
     tile_fp = normpath(tile_fp)
     model_weights_fp = normpath(model_weights_fp)
     out_fp = normpath(out_fp)
+
+    assert isfile(tile_fp), tile_fp
+    assert isfile(model_weights_fp), model_weights_fp
+    assert isdir(out_fp), out_fp
 
     from unet.UNet import UNet
     from unet.config import input_shape, batch_size
@@ -66,7 +66,7 @@ def main():
         f_i[f_i == 0] = nan
 
         s_i = (f_i - nanmean(f_i)) / nanstd(f_i)
-        s_i[s_i == nan] = 0
+        s_i[isnan(s_i)] = 0
 
         if s_i.shape != (256, 256): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
             return s_i.resize((256, 256), refcheck=False)
