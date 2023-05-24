@@ -78,8 +78,8 @@ def main():
         assert pan_img.shape == ndvi_img.shape == boundary_img.shape == annotation_img.shape
 
         arr = zeros((1056, 1056, 2), dtype=float32)
-        arr[..., 0] = ndvi_img
-        arr[..., 1] = pan_img
+        arr[..., 0] = pan_img
+        arr[..., 1] = ndvi_img
 
         frames.append(FrameInfo(img=arr, annotations=annotation_img, weight=boundary_img))
     assert len(frames) > 0
