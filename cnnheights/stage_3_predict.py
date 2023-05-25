@@ -40,17 +40,18 @@ def main():
     model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
 
     tile_ds = gdal.Open(tile_fp)
-    tile_xy = 32768
-    assert tile_ds.RasterXSize == tile_xy
-    assert tile_ds.RasterYSize == tile_ds.RasterXSize
+    tile_x = tile_ds.RasterXSize
+    tile_y = tile_ds.RasterYSize
+
+    if tile_fp.endswith("mosaic.tif"):
+        assert tile_x == 32768
+        assert tile_x == tile_y
 
     geotransform = tile_ds.GetGeoTransform()
     out_projection = tile_ds.GetProjection()
 
     pan = tile_ds.GetRasterBand(1).ReadAsArray()
     ndvi = tile_ds.GetRasterBand(2).ReadAsArray()
-    assert pan.shape == ndvi.shape
-    assert pan.shape == (tile_xy, tile_xy)
 
     tile_ds = None
 
@@ -58,9 +59,9 @@ def main():
     step = 256 - overlap
     #NOTE(Jesse): batch_count is just how much data we pre-package to send to the CNN.  predict() will cut it into individual batches for us
     # Here, we cut the mosaic tile into rows which span the whole tile, and each such row is 1 batch
-    batch_count = int(ceil(tile_xy / step))
+    batch_count = int(ceil(tile_x / step))
     batch = zeros((batch_count, 256, 256, 2), dtype=float32)
-    out_predictions = zeros((tile_xy, tile_xy), dtype=uint8)
+    out_predictions = zeros((tile_y, tile_x), dtype=uint8)
 
     def standardize(i):
         f_i = i.astype(float32)
@@ -74,28 +75,21 @@ def main():
 
         return s_i
 
-    batch_idx = 0
-    for y in range(0, tile_xy, step):
-        y0 = min(y,       tile_xy)
-        y1 = min(y + 256, tile_xy)
+    for y0 in range(0, tile_y, step):
+        y1 = min(y0 + 256, tile_y)
 
-        for x in range(0, tile_xy, step):
-            x0 = min(x,       tile_xy)
-            x1 = min(x + 256, tile_xy)
+        for batch_idx, x0 in enumerate(range(0, tile_x, step)):
+            x1 = min(x0 + 256, tile_x)
 
             batch[batch_idx, ..., 0] =  standardize(pan[y0:y1, x0:x1])
             batch[batch_idx, ..., 1] = standardize(ndvi[y0:y1, x0:x1])
-            batch_idx += 1
-
-        assert batch_idx == batch_count
-        batch_idx = 0
 
         predictions = squeeze(model.predict(batch, batch_size=16)) * 100
         batch.fill(0)
 
-        for i, x in enumerate(range(0, tile_xy, step)):
-            x0 = min(x,       tile_xy)
-            x1 = min(x + 256, tile_xy)
+        for i, x0 in enumerate(range(0, tile_x, step)):
+            x1 = min(x0 + 256, tile_x)
+
             op = out_predictions[y0:y1, x0:x1]
             p = predictions[i].astype(uint8)
 
@@ -111,7 +105,7 @@ def main():
     ndvi = None
     batch = None
 
-    nn_mem_ds = gdal.GetDriverByName("MEM").Create('', xsize=tile_xy, ysize=tile_xy, bands=1, eType=gdal.GDT_Byte)
+    nn_mem_ds = gdal.GetDriverByName("MEM").Create('', xsize=tile_x, ysize=tile_y, bands=1, eType=gdal.GDT_Byte)
     assert nn_mem_ds
 
     nn_mem_ds.GetRasterBand(1).SetNoDataValue(no_data_value)
