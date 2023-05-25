@@ -108,10 +108,7 @@ if __name__ == "__main__":
         with Pool() as p:
             fps = p.map(PROCESS_compute_tree_annotation_and_boundary_raster, training_files, chunksize=1)
 
-        vrt_dsses = [None] * len(fps)
-        for i, fp in enumerate(fps):
-            vrt_dsses[i] = gdal.Open(fp)
-
+        vrt_dsses = [gdal.Open(fp) for fp in len(fps)]
         vrt_ds = gdal.BuildVRT(join(training_data_fp, "annotation_and_boundary.vrt"), vrt_dsses)
         vrt_ds = None
 

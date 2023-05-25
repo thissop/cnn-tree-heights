@@ -5,10 +5,6 @@ tile_shp_fp = "/path/to/mosaic_tile.shp"
 nn_result_fp = "/path/to/nn_results.tif"
 out_dir = "/path/to/output/"
 
-tile_shp_fp = "/path/to/mosaic/cutline.shp"
-nn_result_fp = "/path/to/nn_result.tif"
-out_dir = "/path/to/output/directory/"
-
 if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
     exit()
