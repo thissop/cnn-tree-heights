@@ -71,32 +71,35 @@ def main():
         s_i[isnan(s_i)] = 0
 
         if s_i.shape != (256, 256): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
-            return s_i.resize((256, 256), refcheck=False)
+            s_i.resize((256, 256), refcheck=False)
 
         return s_i
 
     for y0 in range(0, tile_y, step):
         y1 = min(y0 + 256, tile_y)
 
+        pan_batch = pan[y0:y1, :]
+        ndvi_batch = ndvi[y0:y1, :]
         for batch_idx, x0 in enumerate(range(0, tile_x, step)):
             x1 = min(x0 + 256, tile_x)
 
-            batch[batch_idx, ..., 0] =  standardize(pan[y0:y1, x0:x1])
-            batch[batch_idx, ..., 1] = standardize(ndvi[y0:y1, x0:x1])
+            batch[batch_idx, ..., 0] =  standardize(pan_batch[:, x0:x1])
+            batch[batch_idx, ..., 1] = standardize(ndvi_batch[:, x0:x1])
 
         predictions = squeeze(model.predict(batch, batch_size=16)) * 100
         batch.fill(0)
 
+        out_predictions_batch = out_predictions[y0:y1, :]
         for i, x0 in enumerate(range(0, tile_x, step)):
             x1 = min(x0 + 256, tile_x)
 
-            op = out_predictions[y0:y1, x0:x1]
+            op = out_predictions_batch[:, x0:x1]
             p = predictions[i].astype(uint8)
 
             if op.shape != p.shape: #NOTE(Jesse): Handle fractional step patches
                 p.resize(op.shape, refcheck=False)
 
-            out_predictions[y0:y1, x0:x1] = maximum(op, p)
+            out_predictions_batch[:, x0:x1] = maximum(op, p)
 
     no_data_value = 255
     out_predictions[(ndvi == 0) & (out_predictions <= 50)] = no_data_value #NOTE(Jesse): Transfer no-data value fromo mosaic tile to these results.
