@@ -28,20 +28,24 @@ def get_heights(annotations_gdf, cutlines_shp_file:str=None, cutline_info:dict=N
     zenith_angle = cutline_info['SUN_ELEV']
     if exact_mode: 
         lines = []
-        for polygon in annotations_gdf['geometry']:
-            centroid = polygon.centroid
-            line_length = max(polygon.bounds[2] - polygon.bounds[0], polygon.bounds[3] - polygon.bounds[1]) * 2
-            angle = math.radians(sun_az)
-            endpoints = [(centroid.x - math.cos(angle) * line_length / 2, centroid.y - math.sin(angle) * line_length / 2),
-                        (centroid.x + math.cos(angle) * line_length / 2, centroid.y + math.sin(angle) * line_length / 2)]
-            line = LineString(endpoints)
-            closest_intersection_point = min([line.intersection(LineString([polygon.exterior.coords[i], polygon.exterior.coords[i+1]]))
-                                            for i in range(len(polygon.exterior.coords)-1) if line.intersects(LineString([polygon.exterior.coords[i], polygon.exterior.coords[i+1]]))],
-                                            key=centroid.distance)
-            line = LineString([closest_intersection_point, Point(2*centroid.x-closest_intersection_point.x, 2*centroid.y-closest_intersection_point.y)])
-            lines.append(line) # @THADDAEUS: MAKE SURE IN FUTURE THAT IT DOESNT'T NOT APPEND ANYTHING!
 
-        annotation_lines = gpd.GeoDataFrame({'geometry':lines}, crs=f'EPSG:{annotations_gdf.crs.to_epsg()}')
+        for polygon in annotations_gdf['geometry']:
+
+            final_distance = 0 #final shadow length for every polygon 
+            
+            center_point_x = (polygon.exterior.coords[0][0] + polygon.exterior.coords[1][0]) / 2 #finding x and y components of tree canopy centroid point excluding shadow
+            center_point_y = (polygon.exterior.coords[0][1] + polygon.exterior.coords[1][1]) / 2
+            sun_angle = math.radians(450 - sun_az)
+
+            for i in range(2, len(polygon.exterior.coords) - 1): #iterate between every vertex point except the 2 points that define cutline
+                
+                x = polygon.exterior.coords[i][0] - center_point_x
+                y = polygon.exterior.coords[i][1] - center_point_y
+
+                shadow_length = math.abs((x * math.cos(sun_angle)) + (y * math.sin(sun_angle))) #distance between vertex point and the line that is perpendicular to the solar angle and cuts through the centroid of the tree
+
+                if shadow_length >= final_distance: 
+                    final_distance = shadow_length 
 
     else: 
         dy = np.abs(d/np.tan(np.radians(sun_az)))
