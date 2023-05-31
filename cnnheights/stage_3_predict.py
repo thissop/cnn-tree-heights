@@ -10,6 +10,7 @@ if __name__ != "__main__":
     exit()
 
 def main():
+    print("Import")
     from os.path import isfile, isdir, normpath, join
     from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, isnan
     from osgeo import gdal, ogr
@@ -38,6 +39,7 @@ def main():
     from unet.config import input_shape, batch_size
 
     #NOTE(Jesse): batch_size is how many 256x256 patches the CNN predicts in 1 go
+    print("UNET")
     model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
 
     tile_ds = gdal.Open(tile_fp)
@@ -51,6 +53,7 @@ def main():
     geotransform = tile_ds.GetGeoTransform()
     out_projection = tile_ds.GetProjection()
 
+    print("Read tile bands")
     pan = tile_ds.GetRasterBand(1).ReadAsArray()
     ndvi = tile_ds.GetRasterBand(2).ReadAsArray()
 
@@ -76,6 +79,7 @@ def main():
 
         return s_i
 
+    print("Predict")
     for y0 in range(0, tile_y, step):
         y1 = min(y0 + 256, tile_y)
 
@@ -123,6 +127,7 @@ def main():
     nn_mem_ds.SetProjection(out_projection)
     nn_mem_band = nn_mem_ds.GetRasterBand(1)
 
+    print("Creating prediction mask")
     #NOTE(Jesse): Convert raster predictions to vector geometries via binary mask of >50% thresholding
     arr = out_predictions.copy()
 
@@ -136,16 +141,20 @@ def main():
     shadow_mem_lyr = shadow_mem_ds.CreateLayer("shadows", nn_mem_ds.GetSpatialRef(), ogr.wkbPolygon)
     shadow_mem_lyr.CreateField(ogr.FieldDefn("shadow length", ogr.OFTReal))
 
+    print("Polygonize")
     gdal.Polygonize(nn_mem_band, nn_mem_band, shadow_mem_lyr, -1)
 
+    print("Simplify")
     #shadow_mem_lyr.StartTransaction()
     set_feature = shadow_mem_lyr.SetFeature
     for i, ftr in enumerate(shadow_mem_lyr):
         geo = ftr.GetGeometryRef()
-        s_geo = geo.SimplifyPreserverTopology(1) #NOTE(Jesse): Merge vertices <= 1 meter distant (~two pixels)
+        s_geo = geo.SimplifyPreserveTopology(0.5)
         assert s_geo.IsValid(), i
 
         ftr.SetGeometry(s_geo)
+
+        assert ftr.Validate(), i
 
         set_feature(ftr)
         s_geo = None
@@ -153,6 +162,7 @@ def main():
     ftr = None
     #shadow_mem_lyr.CommitTransaction()
 
+    print("Save out")
     shadows_ds = ogr.GetDriverByName("GPKG").CopyDataSource(shadow_mem_ds, join(out_fp, "shadows.gpkg"))
     shadow_mem_lyr = None
     shadow_mem_ds = None
