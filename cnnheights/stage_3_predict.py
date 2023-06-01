@@ -5,6 +5,9 @@ tile_fp = "/path/to/tile.tif"
 out_fp = "/path/to/destination/"
 model_weights_fp = "/path/to/weights.h5"
 
+label_name = "shadows" #NOTE(Jesse): What is being predicted?
+vector_simplification_amount = 0.45 #NOTE(Jesse): Are predicted vectory geometries to be simplified?  Set to > 0 to enable, in accordance with OGR Geometry Simplify.
+
 if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
     exit()
@@ -14,6 +17,7 @@ def main():
     from os.path import isfile, isdir, normpath, join
     from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, isnan
     from osgeo import gdal, ogr
+    #import sozipfile.sozipfile as zipfile #NOTE(Jesse): pip install sozipfile, #TODO(Jesse): See TODO at the bottom of the script
 
     gdal.UseExceptions()
     ogr.UseExceptions()
@@ -26,6 +30,12 @@ def main():
     global tile_fp
     global model_weights_fp
     global out_fp
+    global label_name
+    global vector_simplification_amount
+
+    assert label_name is not None
+    assert vector_simplification_amount is not None
+    assert isinstance(vector_simplification_amount, (int, float))
 
     tile_fp = normpath(tile_fp)
     model_weights_fp = normpath(model_weights_fp)
@@ -137,36 +147,36 @@ def main():
     nn_mem_band.WriteArray(arr)
     arr = None
 
-    shadow_mem_ds = ogr.GetDriverByName("Memory").CreateDataSource("")
-    shadow_mem_lyr = shadow_mem_ds.CreateLayer("shadows", nn_mem_ds.GetSpatialRef(), ogr.wkbPolygon)
-    shadow_mem_lyr.CreateField(ogr.FieldDefn("shadow length", ogr.OFTReal))
+    ogr_mem_ds = ogr.GetDriverByName("Memory").CreateDataSource("")
+    ogr_mem_lyr = ogr_mem_ds.CreateLayer(label_name, nn_mem_ds.GetSpatialRef(), ogr.wkbPolygon)
 
     print("Polygonize")
-    gdal.Polygonize(nn_mem_band, nn_mem_band, shadow_mem_lyr, -1)
+    gdal.Polygonize(nn_mem_band, nn_mem_band, ogr_mem_lyr, -1)
 
     print("Simplify")
-    #shadow_mem_lyr.StartTransaction()
-    set_feature = shadow_mem_lyr.SetFeature
-    for i, ftr in enumerate(shadow_mem_lyr):
-        geo = ftr.GetGeometryRef()
-        s_geo = geo.SimplifyPreserveTopology(0.5)
-        assert s_geo.IsValid(), i
+    if vector_simplification_amount > 0:
+        #ogr_mem_lyr.StartTransaction()
+        set_feature = ogr_mem_lyr.SetFeature
+        for i, ftr in enumerate(ogr_mem_lyr):
+            geo = ftr.GetGeometryRef()
+            s_geo = geo.SimplifyPreserveTopology(vector_simplification_amount)
+            assert s_geo.IsValid(), i
 
-        ftr.SetGeometry(s_geo)
+            ftr.SetGeometry(s_geo)
 
-        assert ftr.Validate(), i
+            assert ftr.Validate(), i
 
-        set_feature(ftr)
-        s_geo = None
-        geo = None
-    ftr = None
-    #shadow_mem_lyr.CommitTransaction()
+            set_feature(ftr)
+            s_geo = None
+            geo = None
+        ftr = None
+        #ogr_mem_lyr.CommitTransaction()
 
     print("Save out")
-    shadows_ds = ogr.GetDriverByName("GPKG").CopyDataSource(shadow_mem_ds, join(out_fp, "shadows.gpkg"))
-    shadow_mem_lyr = None
-    shadow_mem_ds = None
-    shadows_ds = None
+    ogr_dsk_ds = ogr.GetDriverByName("GPKG").CopyDataSource(ogr_mem_ds, join(out_fp, f"{label_name}.gpkg"))
+    ogr_mem_lyr = None
+    ogr_mem_ds = None
+    ogr_dsk_ds = None
 
     disk_create_options: list = ['COMPRESS=ZSTD', 'ZSTD_LEVEL=1', 'INTERLEAVE=BAND', 'Tiled=YES', 'NUM_THREADS=ALL_CPUS', 'SPARSE_OK=True', 'PREDICTOR=2']
     nn_mem_band.WriteArray(out_predictions)
@@ -174,5 +184,7 @@ def main():
     nn_disk_ds = gdal.GetDriverByName('GTiff').CreateCopy(join(out_fp, 'NN_classification.tif'), nn_mem_ds, options=disk_create_options)
     nn_mem_ds = None
     nn_disk_ds = None
+
+    #TODO(Jesse): Save outputs to Seek Optimized zipfile archive (skip compression for .tif files as they are already zstd compressed). See https://github.com/sozip/sozipfile
 
 main()
