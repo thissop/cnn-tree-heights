@@ -140,18 +140,29 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     input_files = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir)]
 
+    _ = [os.remove(i) for i in input_files if '-shm' in i or '-wal' in i]
+    input_files = [i for i in input_files if '-shm' not in i and '-wal' not in i]
+
     area_files = np.sort([i for i in input_files if 'vector_boundary' in i]) 
     annotation_files = np.sort([i for i in input_files if 'vector_annotation' in i]) 
     raw_ndvi_images = np.sort([i for i in input_files if 'ndvi' in i]) 
     raw_pan_images = np.sort([i for i in input_files if 'pan' in i]) 
+
+
 
     allAreasWithPolygons = [] 
 
     print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)]) 
     write_counters = []
     for i in range(len(area_files)): 
+        print(area_files[i])
         trainingArea = gps.read_file(area_files[i])
         trainingPolygon = gps.read_file(annotation_files[i])
+
+        trainingPolygon['is_valid'] = trainingPolygon['geometry'].is_valid
+        trainingPolygon = trainingPolygon[trainingPolygon['is_valid']]
+        trainingPolygon.to_file(annotation_files[i])
+
         write_counters.append(int(area_files[i].split('_')[-1].split('.')[0]))
 
         #print(f'Read a total of {trainingPolygon.shape[0]} object polygons and {trainingArea.shape[0]} training areas.')
