@@ -13,7 +13,7 @@ if __name__ != "__main__":
 
 def main():
     from os.path import normpath, isdir
-    from math import ceil, sqrt, square, radians, cos, sin, pow, tan
+    from math import ceil, sqrt, radians, cos, sin, pow, tan
     from osgeo import ogr
     ogr.UseExceptions()
 
@@ -84,7 +84,7 @@ def main():
     shadow_no_pair_count = 0
 
     def is_oblong(envelope):
-        (x_min, x_max, y_min, y_max) = *envelope
+        (x_min, x_max, y_min, y_max) = envelope
         x_span = x_max - x_min
         y_span = y_max - y_min
 
@@ -124,7 +124,7 @@ def main():
             y_bins_count = int(ceil(y_span / bins_xy_meters))
             x_bins_count = int(ceil(x_span / bins_xy_meters))
 
-            spatial_bins = [[None] * x_bins_count] * y_bins_count
+            spatial_bins = [[] * x_bins_count] * y_bins_count
 
             #IMPORTANT(Jesse): SetSpatialFilter works by only filtering out feature geometries whose
             # extent to not intersect with the spatial filter.  This means that a feature geometry can be
@@ -160,7 +160,7 @@ def main():
                 closest_distance = 9999999.9
                 closest_ftr = None
                 for ftr, f_y_center, f_x_center in spatial_bin:
-                    distance = sqrt(square(f_y_center - h_y_center) + square(f_x_center - h_x_center))
+                    distance = sqrt(((f_y_center - h_y_center) ** 2) + ((f_x_center - h_x_center) ** 2))
                     if distance < closest_distance:
                         closest_distance = distance
                         closest_ftr = ftr
