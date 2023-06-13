@@ -19,7 +19,7 @@ cutout_fp = "/path/to/cutouts" #NOTE(Jesse): Directory to store selected cutouts
 bounds_to_generate = 2
 
 def is_overlapping_1d(range1, range2):
-    return range1[0] <= range2[1] & range1[1] >= range2[0]
+    return (range1[0] <= range2[1]) & (range1[1] >= range2[0])
 
 def filter_overlapped_bounds(bounds_xy):
     assert len(bounds_xy) > 0
