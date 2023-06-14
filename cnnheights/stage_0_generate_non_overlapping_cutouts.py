@@ -88,16 +88,24 @@ def main():
     cutout_xy = 1024
 
     extent_xy = mosaic_xy - cutout_xy
-    while True:
-        bounds_xy = randint(0, extent_xy, (bounds_to_generate * 2, 2))
+    attempts_max = 10
+    attempts = 0
+    while attempts < attempts_max:
+        bounds_xy = randint(0, extent_xy, (bounds_to_generate * 2, 2)) #NOTE(Jesse): Generate more than requested in the event of overlaps.
         bounds_xy = filter_overlapped_bounds(bounds_xy)
         if len(bounds_xy) >= bounds_to_generate:
+            bounds_xy = bounds_xy[:bounds_to_generate]
             break
 
-    bounds_xy = bounds_xy[:bounds_to_generate]
+        attempts += 1
 
-    vrt_dsses = [None] * len(bounds_xy)
+    if attempts == attempts_max:
+        print(f"[NOTE] Could not generate requested bounds count {bounds_to_generate} in the number of attempts {attempts_max}. {bounds_to_generate - len(bounds_xy)} not produced")
+        print(f"\tThis is likely because the requested count was too large, and the odds for overlap given the extent size {extent_xy} was too high.")
+
     with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN=True, GDAL_NUM_THREADS="ALL_CPUS", NUM_THREADS="ALL_CPUS"):
+        vrt_dsses = [None] * len(bounds_xy)
+        
         with rasterio.open(mosaic_fp, 'r') as ds: #TODO(Jesse): Multiprocessing if this is slow somehow.
             ds_transform = ds.transform
             Window = rasterio.windows.Window
@@ -120,9 +128,9 @@ def main():
 
                 vrt_dsses[i] = gdal.Open(output_tif_path)
 
-    vrt_ds = gdal.BuildVRT(join(cutout_fp, "cutout.vrt"), vrt_dsses)
-    vrt_ds = None
-    vrt_dsses = None
+        vrt_ds = gdal.BuildVRT(join(cutout_fp, "cutout.vrt"), vrt_dsses)
+        vrt_ds = None
+        vrt_dsses = None
 
 from time import time
 begin = time() / 60
