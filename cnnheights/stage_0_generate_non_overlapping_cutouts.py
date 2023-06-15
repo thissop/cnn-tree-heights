@@ -2,7 +2,6 @@
 #
 # While this can be used locally, it is intended to be used on NCCS Discover.
 
-
 if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
     exit()
@@ -10,7 +9,7 @@ if __name__ != "__main__":
 #NOTE(Jesse): These are the two inputs you must configure, and both must already exist.  We do not create directories on your behalf.
 tile_root_dir = "/css/nga/mosaics/SSAc3.2/UTM_Zones/" 
 cutout_dir = "/discover/nobackup/jrmeyer3/tree_heights/annotation_cutouts/" #NOTE(Jesse): Directory to store selected cutouts.
-chirps_fp = "/discover/nobackup/projects/sacs_tucker/inputs/chirps/mean_chirps_05deg/mean_annual_chirps.tif"
+chirps_fp = "/discover/nobackup/projects/sacs_tucker/inputs/chirps/mean_chirps_05deg/mean_annual_chirps_int16_zstd.tif"
 bounds_to_generate_per_tile = 3
 
 local = False
@@ -106,12 +105,12 @@ def main():
     cutout_xy = 1024
 
     extent_xy = mosaic_xy - cutout_xy
-    attempts_max = 10
+    filter_attempts_max = 10
+    tiles_per_zone = 10
 
     utm_zones = (28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40)
-    tiles_per_zone = 1
     with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN=True, GDAL_NUM_THREADS="ALL_CPUS", NUM_THREADS="ALL_CPUS"):
-        with rasterio.open(chirps_fp) as chirps_ds:
+        with rasterio.open(chirps_fp, 'r') as chirps_ds:
             chirps_crs = chirps_ds.crs
             chirps_trans = chirps_ds.transform
             assert "EPSG:4326" == chirps_crs.to_string()
@@ -140,7 +139,7 @@ def main():
                 randomly_selected_tile_numbers = utm_tile_dirs[:tiles_per_zone]
                 for tile_number in randomly_selected_tile_numbers:
                     bounds_xy = None
-                    for _ in range(attempts_max):
+                    for _ in range(filter_attempts_max):
                         bounds_xy = filter_overlapped_bounds(randint(0, extent_xy, (bounds_to_generate_per_tile * 2, 2))) #NOTE(Jesse): Generate more than requested in the event of overlaps.
                         if len(bounds_xy) >= bounds_to_generate_per_tile:
                             bounds_xy = bounds_xy[:bounds_to_generate_per_tile]
