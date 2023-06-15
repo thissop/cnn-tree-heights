@@ -15,7 +15,7 @@ if __name__ != "__main__":
 def main():
     print("Import")
     from os.path import isfile, isdir, normpath, join
-    from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, isnan
+    from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, mean, std
     from osgeo import gdal, ogr
     import sozipfile
     #import sozipfile.sozipfile as zipfile #NOTE(Jesse): pip install sozipfile, #TODO(Jesse): See TODO at the bottom of the script
@@ -80,10 +80,14 @@ def main():
 
     def standardize(i):
         f_i = i.astype(float32)
-        f_i[f_i == 0] = nan
+        has_nans = f_i == 0
+        if has_nans.any():
+            f_i[has_nans] = nan
 
-        s_i = (f_i - nanmean(f_i)) / nanstd(f_i)
-        s_i[isnan(s_i)] = 0
+            s_i = (f_i - nanmean(f_i)) / nanstd(f_i)
+            s_i[has_nans] = 0
+        else:
+            s_i = (f_i - mean(f_i)) / std(f_i)
 
         if s_i.shape != (256, 256): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
             s_i.resize((256, 256), refcheck=False)
