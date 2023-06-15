@@ -158,10 +158,11 @@ def preprocess(input_data_dir:str, output_data_dir:str):
         print(area_files[i])
         trainingArea = gps.read_file(area_files[i])
         trainingPolygon = gps.read_file(annotation_files[i])
-        print(trainingPolygon)
-        #trainingPolygon['is_valid'] = trainingPolygon['geometry'].is_valid
-        #trainingPolygon = trainingPolygon[trainingPolygon['is_valid']]
-        #trainingPolygon.to_file(annotation_files[i])
+
+        if '_86' in area_files[i]:
+            trainingPolygon['is_valid'] = trainingPolygon['geometry'].is_valid
+            trainingPolygon = trainingPolygon[trainingPolygon['is_valid']]
+            #trainingPolygon.to_file(annotation_files[i])
 
         write_counters.append(int(area_files[i].split('_')[-1].split('.')[0]))
 
