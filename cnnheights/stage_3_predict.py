@@ -17,6 +17,7 @@ def main():
     from os.path import isfile, isdir, normpath, join
     from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, isnan
     from osgeo import gdal, ogr
+    import sozipfile
     #import sozipfile.sozipfile as zipfile #NOTE(Jesse): pip install sozipfile, #TODO(Jesse): See TODO at the bottom of the script
 
     gdal.UseExceptions()
@@ -186,5 +187,15 @@ def main():
     nn_disk_ds = None
 
     #TODO(Jesse): Save outputs to Seek Optimized zipfile archive (skip compression for .tif files as they are already zstd compressed). See https://github.com/sozip/sozipfile
+    # done? 
+
+    # Create a Seek Optimized zipfile
+    zip_filename = join(out_fp, 'output.zip')
+    with sozipfile.ZipFile(zip_filename, 'w', compression=sozipfile.Compression.NONE) as zipf:
+        # Add the GeoPackage file to the zipfile
+        zipf.write(join(out_fp, f"{label_name}.gpkg"), arcname=f"{label_name}.gpkg") # two parameters: the path for what you want to add and the optional arcname (name of the file within the zipfile)
+
+        # Add the TIFF file to the zipfile without compression
+        zipf.write(join(out_fp, 'NN_classification.tif'), arcname='NN_classification.tif', compress_type=sozipfile.Compression.NONE)
 
 main()

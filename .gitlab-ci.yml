@@ -1,0 +1,24 @@
+stages:
+  - train
+  - prediction
+
+train_neural_network:
+  stage: train
+  tags:
+    - fast_computer  # Replace with the tag of the computer that triggers the workflow (Settings > CI/CD > Runners section; click on desired runner to look at its tags)
+  script:
+    - apt-get update
+    - apt-get install -y python3  
+    - python3 -m pip install -r requirements.txt  
+    - python3 cnnheights/stage_2_train_unet.py 
+
+prediction_and_evaluation:
+  stage: prediction
+  script:
+    - apt-get update
+    - apt-get install -y python3  
+    - python3 -m pip install -r requirements.txt 
+    - python3 cnnheights/stage_5_ci_select_and_evaluate_cutouts.py  # Script to select M cutouts, predict for these M cutouts, and evaluate results. 
+  only:
+    variables:
+      - $CI_PIPELINE_SOURCE == "schedule"  # Trigger the job only when manually scheduled (for now).
