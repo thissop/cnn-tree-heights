@@ -17,8 +17,7 @@ def main():
     from os.path import isfile, isdir, normpath, join
     from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, mean, std
     from osgeo import gdal, ogr
-    import sozipfile
-    #import sozipfile.sozipfile as zipfile #NOTE(Jesse): pip install sozipfile, #TODO(Jesse): See TODO at the bottom of the script
+    import sozipfile.sozipfile as zipfile #NOTE(Jesse): pip install sozipfile, #TODO(Jesse): See TODO at the bottom of the script
 
     gdal.UseExceptions()
     ogr.UseExceptions()
@@ -195,11 +194,13 @@ def main():
 
     # Create a Seek Optimized zipfile
     zip_filename = join(out_fp, 'output.zip')
-    with sozipfile.ZipFile(zip_filename, 'w', compression=sozipfile.Compression.NONE) as zipf:
+
+    with zipfile.ZipFile(zip_filename, 'w',
+                        compression=zipfile.ZIP_DEFLATED,
+                        chunk_size=zipfile.SOZIP_DEFAULT_CHUNK_SIZE) as myzip:
         # Add the GeoPackage file to the zipfile
-        zipf.write(join(out_fp, f"{label_name}.gpkg"), arcname=f"{label_name}.gpkg") # two parameters: the path for what you want to add and the optional arcname (name of the file within the zipfile)
-
-        # Add the TIFF file to the zipfile without compression
-        zipf.write(join(out_fp, 'NN_classification.tif'), arcname='NN_classification.tif', compress_type=sozipfile.Compression.NONE)
-
+        myzip.write(join(out_fp, f"{label_name}.gpkg")), 
+        # Add the TIFF file to the zipfile
+        myzip.write(join(out_fp, 'NN_classification.tif'))
+    
 main()
