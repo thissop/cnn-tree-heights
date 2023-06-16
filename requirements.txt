@@ -12,6 +12,6 @@ pvlib
 fiona
 pyproj
 pillow
-#tensorflow-macos
-#tensorflow-metal
+#tensorflow-macos 
+#tensorflow-metal   
 pyarrow 
