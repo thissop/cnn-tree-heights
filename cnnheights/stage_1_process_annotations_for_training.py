@@ -8,18 +8,14 @@
 
 training_data_fp = "/path/to/training/annotations"
 
+training_data_fp = "/Users/jrmeyer3/cnn-tree-heights/training_data"
+
 def PROCESS_compute_tree_annotation_and_boundary_raster(vector_fp):
-    #NOTE(Jesse): Find an accompanying raster filename based on the vector_fp to geolocate the result masks.
-    vector_fp_split = vector_fp.split('/')
-    vector_fn = vector_fp_split[-1]
-    raster_fp_base = "/".join(vector_fp_split[:-1]) + "/"
-    vector_fn = vector_fn.split('.')[0]
-    v_id = vector_fn.split('_')[-1]
-    assert v_id.isdigit(), f"{vector_fn} the ID number was expected after the last '_' in the file name."
+    from os import rename
 
-    #TODO(Jesse): Remove PNG support and use the pan_ndvi_cutout file name convention
-
-    raster_disk_ds = gdal.Open(raster_fp_base + f"extracted_ndvi_{int(v_id)}.png")
+    raster_fp = vector_fp.replace(".gpkg", ".tif")
+    raster_disk_ds = gdal.Open(raster_fp)
+    assert raster_disk_ds.RasterXSize == raster_disk_ds.RasterYSize == 1024
 
     #NOTE(Jesse): Create in memory raster of the same geospatial extents as the mask for high performance access.
     raster_mem_ds = gdal.GetDriverByName("MEM").Create('', xsize=raster_disk_ds.RasterXSize, ysize=raster_disk_ds.RasterYSize, bands=1, eType=gdal.GDT_Byte)
@@ -65,13 +61,16 @@ def PROCESS_compute_tree_annotation_and_boundary_raster(vector_fp):
 
     #NOTE(Jesse): Save the composite array out to disk.
     disk_create_options = ['COMPRESS=ZSTD', 'ZSTD_LEVEL=1', 'INTERLEAVE=BAND', 'Tiled=YES', 'NUM_THREADS=ALL_CPUS', 'SPARSE_OK=True', 'PREDICTOR=2', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256']
-    result_fp = raster_fp_base + f"annotation_and_boundary_{v_id}.tif"
-    raster_disk_ds = gdal.GetDriverByName("GTiff").Create(result_fp, xsize=raster_mem_ds.RasterXSize, ysize=raster_mem_ds.RasterYSize, bands=1, eType=gdal.GDT_Byte, options=disk_create_options)
+    tmp_result_fp = raster_fp.replace(".tif", "_annotation_and_boundary_tmp.tif")
+    raster_disk_ds = gdal.GetDriverByName("GTiff").Create(tmp_result_fp, xsize=raster_mem_ds.RasterXSize, ysize=raster_mem_ds.RasterYSize, bands=1, eType=gdal.GDT_Byte, options=disk_create_options)
     raster_disk_ds.GetRasterBand(1).SetNoDataValue(0) #NOTE(Jesse): 0 is actually "valid" but for QGIS visualization, we want it to be transparent.
     raster_disk_ds.SetGeoTransform(raster_mem_ds.GetGeoTransform())
     raster_disk_ds.SetProjection(raster_mem_ds.GetProjection())
     raster_disk_ds.GetRasterBand(1).WriteArray(composite_arr)
-    del raster_disk_ds
+    raster_disk_ds = None
+
+    result_fp = tmp_result_fp.replace("_tmp", "")
+    rename(tmp_result_fp, result_fp)
 
     return result_fp
 
@@ -94,19 +93,19 @@ if __name__ == "__main__":
         start = time()
 
         from os import listdir
-        from os.path import join, normpath
+        from os.path import join, normpath, isdir
 
         global training_data_fp
 
         training_data_fp = normpath(training_data_fp)
+        assert isdir(training_data_fp), training_data_fp
 
-        training_files = listdir(training_data_fp)
-        training_files = [join(training_data_fp, f) for f in training_files if f.endswith(".gpkg")]
+        training_gpkg_files = [join(training_data_fp, f) for f in listdir(training_data_fp) if f.endswith(".gpkg")]
 
-        assert len(training_files) > 0, f"No training .gpkg database files were found in {training_data_fp}"
+        assert len(training_gpkg_files) > 0, f"No training .gpkg database files were found in {training_data_fp}"
 
         with Pool() as p:
-            fps = p.map(PROCESS_compute_tree_annotation_and_boundary_raster, training_files, chunksize=1)
+            fps = p.map(PROCESS_compute_tree_annotation_and_boundary_raster, training_gpkg_files, chunksize=1)
 
         vrt_dsses = [gdal.Open(fp) for fp in fps]
         vrt_ds = gdal.BuildVRT(join(training_data_fp, "annotation_and_boundary.vrt"), vrt_dsses)
