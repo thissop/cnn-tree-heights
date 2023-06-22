@@ -1,7 +1,9 @@
 #    Author: Ankit Kariryaa, University of Bremen
+#    Edit: 2 branches: Sizhuo Li
 
-from imgaug import augmenters as iaa
+#from imgaug import augmenters as iaa
 import numpy as np
+
 
 # Sometimes(0.5, ...) applies the given augmenter in 50% of all cases,
 # e.g. Sometimes(0.5, GaussianBlur(0.3)) would blur roughly every second image.
@@ -12,10 +14,18 @@ def imageAugmentationWithIAA():
         iaa.Fliplr(0.5),  # horizontally flip 50% of all images
         iaa.Flipud(0.5),  # vertically flip 20% of all images
         sometimes(iaa.Crop(percent=(0, 0.1))),  # random crops
-        #
-        # # Gaussian blur and gamma contrast
-        #sometimes(iaa.GaussianBlur(sigma=(0, 0.3)), 0.3),
+
+        # Gaussian blur and gamma contrast
+        sometimes(iaa.GaussianBlur(sigma=(0, 0.3)), 0.3),
         # sometimes(iaa.GammaContrast(gamma=0.5, per_channel=True), 0.3),
+
+        # Sharpen
+        sometimes(iaa.Sharpen(alpha=(0.0, 1.0), lightness=(0.75, 2.0))),
+        # AddToHueAndSaturation
+        # sometimes(iaa.AddToHueAndSaturation((-50, 50), per_channel=True)),
+
+        # sometimes(iaa.Affine(scale={"x": (0.5, 1.5), "y": (0.5, 1.5)})),
+        sometimes(iaa.Affine(rotate=(-90, 90))),
 
         # iaa.CoarseDropout((0.03, 0.25), size_percent=(0.02, 0.05), per_channel=True)
         # sometimes(iaa.Multiply((0.75, 1.25), per_channel=True), 0.3),
@@ -27,23 +37,22 @@ def imageAugmentationWithIAA():
         random_order=True)
     return seq
 
-class DataGenerator():
+
+class DataGenerator:
     """The datagenerator class. Defines methods for generating patches randomly and sequentially from given frames.
     """
 
-    def __init__(self, input_image_channel, patch_size, frame_list, frames, annotation_channel = [2,3], augmenter=None):
+    def __init__(self, input_image_channel, patch_size, frames, annotation_channel = [2,3], augmenter=None):
         """Datagenerator constructor
 
         Args:
             input_image_channel (list(int)): Describes which channels is the image are input channels.
             patch_size (tuple(int,int)): Size of the generated patch.
-            frame_list (list(int)): List containing the indexes of frames to be assigned to this generator.
             frames (list(FrameInfo)): List containing all the frames i.e. instances of the frame class.
             augmenter  (string, optional): augmenter to use. None for no augmentation and iaa for augmentations defined in imageAugmentationWithIAA function.
         """
         self.input_image_channel = input_image_channel
         self.patch_size = patch_size
-        self.frame_list = frame_list
         self.frames = frames
         self.annotation_channel = annotation_channel
         self.augmenter = augmenter
@@ -56,8 +65,7 @@ class DataGenerator():
             normalize (float): Probability with which a frame is normalized.
         """
         patches = []
-        for fn in self.frame_list:
-            frame = self.frames[fn]
+        for frame in self.frames:
             ps = frame.sequential_patches(self.patch_size, step_size, normalize)
             patches.extend(ps)
         data = np.array(patches)
@@ -82,8 +90,7 @@ class DataGenerator():
         """
         patches = []
         for i in range(BATCH_SIZE):
-            fn = np.random.choice(self.frame_list)
-            frame = self.frames[fn]
+            frame = np.random.choice(self.frames)
             patch = frame.random_patch(self.patch_size, normalize)
             patches.append(patch)
         
@@ -103,10 +110,11 @@ class DataGenerator():
             normalize (float): Probability with which a frame is normalized.
         
         """
-        seq = imageAugmentationWithIAA()
+        if self.augmenter == 'iaa':
+            seq = imageAugmentationWithIAA()
 
         while True:
-            X, y = self.random_patch(BATCH_SIZE, normalize) # @ THADDAEUS: CHECK THIS NORMALIZATION FOR POTENTIAL ERRORS IN FUTURE!!
+            X, y = self.random_patch(BATCH_SIZE, normalize)
             if self.augmenter == 'iaa':
                 seq_det = seq.to_deterministic()
                 X = seq_det.augment_images(X)

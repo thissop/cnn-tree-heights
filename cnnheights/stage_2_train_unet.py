@@ -4,6 +4,9 @@
 training_data_fp = "C:\\Users\\jrmeyer3\\Documents\\cnn-input"
 model_weights_fp = "C:\\Users\\jrmeyer3\\Documents\\cnn-input\\unet_cnn_model_weights.h5" #NOTE(Jesse): Set this to the directory of a previously trained UNET for post-training, otherwise we output to the training data fp the trained model.
 
+training_data_fp = "/Users/jrmeyer3/cnn-tree-heights/training_data"
+model_weights_fp = None
+
 if __name__ != "__main__":
     print(f"This script {__name__} must be called directly and not imported to be used as a library.  Early exiting.")
     exit()
@@ -12,7 +15,7 @@ def main():
     from time import time
     start = time() / 60
 
-    from os import listdir
+    from os import listdir, environ
     from os.path import join, isdir, isfile, normpath
 
     global training_data_fp
@@ -28,105 +31,160 @@ def main():
 
     import rasterio
     from json import dump
-    from unet.frame_utilities import FrameInfo
-    from numpy import newaxis, zeros, uint16, float32, arange, concatenate
-    from numpy.random import shuffle
+    from unet.frame_utilities import standardize_without_resize
+    from numpy import newaxis, zeros, float32, uint16, uint8, arange, concatenate, where
+    from numpy.random import shuffle, default_rng
 
     training_files = listdir(training_data_fp)
-
-    ndvi_fn_template = "extracted_ndvi_{}.png"
-    pan_fn_template = "extracted_pan_{}.png"
-    boundary_fn_template = "extracted_boundary_{}.png"
-    annotation_fn_template = "extracted_annotation_{}.png"
+    assert len(training_files) > 0
 
     frames = []
+    frame_image_names = []
     print("Loading training data")
     for tf in training_files:
-        if tf.startswith('.'): #NOTE(Jesse): Skip hidden files
+        if not tf.endswith('.tif'):
             continue
 
-        if '.' not in tf:
-            continue #NOTE(Jesse): Skip directories
-
-        if tf.endswith('.vrt'):
+        if not tf[-5].isdigit():
             continue
 
-        if tf.endswith('.json'):
-            continue
-
-        if tf.endswith('.h5'):
-            continue
-
-        tf_fn = tf.split('.')[0]
-        tf_id = tf_fn.split('_')[-1]
-        assert tf_id.isdigit(), f"{tf} the ID number was expected after the last '_' in the file name."
+        assert "cutout" in tf, tf
 
         #NOTE(Jesse): From the ID number we can grab all associated training data.
-        #TODO(Jesse): Support .TIF and new training data specification
-        ndvi_fp = join(training_data_fp, ndvi_fn_template.format(tf_id))
-        pan_fp = join(training_data_fp, pan_fn_template.format(tf_id))
-        boundary_fp = join(training_data_fp, boundary_fn_template.format(tf_id))
-        annotation_fp = join(training_data_fp, annotation_fn_template.format(tf_id))
+        ndvi_pan_fp = join(training_data_fp, tf)
+        annotation_and_boundary_fp = join(training_data_fp, tf.replace(".tif", "_annotation_and_boundary.tif"))
 
-        ndvi_img = rasterio.open(ndvi_fp).read(1)
-        pan_img = rasterio.open(pan_fp).read(1)
-        boundary_img = rasterio.open(boundary_fp).read(1)
-        annotation_img = rasterio.open(annotation_fp).read(1)
+        with rasterio.open(ndvi_pan_fp) as r_ds:
+            pan_img = r_ds.read(1)
+            ndvi_img = r_ds.read(2)
+            
+        annotation_boundary_img = rasterio.open(annotation_and_boundary_fp).read(1)
 
-        #TODO(Jesse): As referred to above, support the 1024x1024 uint16 pan_ndvi version.
-        assert pan_img.shape == (1056, 1056), f"Expected shape of 1056x1056, got {pan_img.shape}"
-        assert pan_img.shape == ndvi_img.shape == boundary_img.shape == annotation_img.shape
+        assert ndvi_img.dtype == uint16
+        assert pan_img.shape == (1024, 1024), f"Expected shape of 1024x1024, got {pan_img.shape}"
+        assert pan_img.shape == ndvi_img.shape == annotation_boundary_img.shape
 
-        arr = zeros((1056, 1056, 2), dtype=float32)
-        arr[..., 0] = pan_img
-        arr[..., 1] = ndvi_img
+        pan_ndvi  = zeros((1024, 1024, 2), dtype=float32)
+        anno_boun = zeros((1024, 1024, 2), dtype=float32)
+        pan_ndvi[..., 0] = standardize_without_resize(pan_img)
+        pan_ndvi[..., 1] = standardize_without_resize(ndvi_img)
 
-        frames.append(FrameInfo(img=arr, annotations=annotation_img, weight=boundary_img))
-    assert len(frames) > 0
+        anno_boun[..., 0] = where(annotation_boundary_img == 1, 1, 0)  #NOTE(Jesse): Is there a simpler computation for this?  It's just masking with a scale.
+        anno_boun[..., 1] = where(annotation_boundary_img == 2, 10, 0) #NOTE(Jesse): Set boundary pixels to 10
 
-    print("Loading Tensorflow")
-    from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
-    from unet.dataset_generator import DataGenerator
-    from unet.config import input_shape, normalize, patch_size, input_image_channel, input_label_channel, input_weight_channel, batch_size
-    from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
-    from unet.UNet import UNet
-    from unet.optimizers import adaDelta
+        frames.append((pan_ndvi, anno_boun))
+        frame_image_names.append(tf)
 
-    shuffled_indices = arange(len(frames))
+    frames_count = len(frames)
+    assert frames_count > 0
+
+    shuffled_indices = arange(frames_count)
     shuffle(shuffled_indices)
 
-    training_frames_count = int((len(frames) * 0.8) + 0.5)
+    training_ratio = 0.8
+    validation_ratio = 0.1
+    test_ratio = 0.1
+    assert training_ratio + validation_ratio + test_ratio == 1.0
+
+    training_frames_count = int((frames_count * training_ratio))
+    validation_frames_count = int((frames_count * validation_ratio))
+    #NOTE(Jesse): The test frame count is just what's left over from training and validation.
+
     training_frame_indices   = shuffled_indices[:training_frames_count]
-    validation_frame_indices = shuffled_indices[training_frames_count:]
+    validation_frame_indices = shuffled_indices[training_frames_count:training_frames_count + validation_frames_count]
+    test_frame_indices = shuffled_indices[training_frames_count + validation_frames_count:]
 
-    if False:
-        #TODO(Jesse): These frame lists are meaningless.  They don't record which image they are from, nor which patch subset is ultimately fed to the CNN.
-        # The prior is vital, the latter is maybe situationally useful.
-        # So, remember which *image* the frame index refers to.
-        frames_fp = join(training_data_fp, 'frames_list.json')
-        with open(frames_fp, 'w') as f:
-            dump({
-            'training_frames_indices': training_frame_indices,
-            'validation_frames_indices': validation_frame_indices
-            }, f)
+    training_frames = [frames[i] for i in training_frame_indices]
+    validation_frames = [frames[i] for i in validation_frame_indices]
+    test_frames = [frames[i] for i in test_frame_indices]
 
-    #TODO(Jesse): I don't know why the DataGenerator needs a separate list of indices and the whole frames list.  Just send the frames it needs.
-    annotation_channels = [input_label_channel, input_weight_channel]
-    training_augmenter = None #'iaa' #NOTE(Jesse): We'll see if iaa helps later on.
-    train_generator = DataGenerator(input_image_channel, patch_size, training_frame_indices, frames, annotation_channels, augmenter =training_augmenter).random_generator(batch_size, normalize = normalize)
-    val_generator = DataGenerator(input_image_channel, patch_size, validation_frame_indices, frames, annotation_channels, augmenter= None).random_generator(batch_size, normalize = normalize)
+    with open(join(training_data_fp, 'frames_list.json'), 'w') as f:
+        dump({
+        'base_file_path': training_data_fp,
+        'training': [frame_image_names[i] for i in training_frame_indices],
+        'validation': [frame_image_names[i] for i in validation_frame_indices],
+        'test': [frame_image_names[i] for i in test_frame_indices],
+        }, f)
 
-    debug = True
+        frame_image_names = None
+
+    def uniform_random_patch_generator(patches, normalization_odds=0.0):
+        random_gen_count = 1024
+        rng = default_rng()
+        randint = rng.integers
+
+        patches_count = len(patches)
+
+        patch_offsets = randint(0, 1024-128, (random_gen_count, 2), dtype=uint16)
+        patch_indices = randint(0, patches_count, random_gen_count, dtype=uint16)
+
+        batch_count = 32
+        batches_pan_ndvi = zeros((batch_count, 128, 128, 2), dtype=float32)
+        batches_anno_bound = zeros((batch_count, 128, 128, 2), dtype=float32)
+
+        normalization_odds = int(normalization_odds * 100)
+        assert normalization_odds <= 100, normalization_odds
+
+        norm_odds = None
+        if normalization_odds > 0:
+            norm_odds = randint(0, 100, random_gen_count, dtype=uint8)
+
+        i = 0
+        while True:
+            for b in range(batch_count):
+                (y, x) = patch_offsets[i]
+                pan_ndvi, anno_boun = patches[patch_indices[i]]
+                pan_ndvi  = pan_ndvi[y : y + 128, x: x + 128, ...]
+                anno_boun = anno_boun[y : y + 128, x: x + 128, ...]
+
+                if norm_odds:
+                    if norm_odds[i] > normalization_odds:
+                        pan_ndvi = standardize_without_resize(pan_ndvi) #NOTE(Jesse): Normalize PAN / NDVI of the patch
+
+                batches_pan_ndvi[b, ...]   = pan_ndvi
+                batches_anno_bound[b, ...] = anno_boun
+
+                i += 1
+                if i == random_gen_count:
+                    patch_offsets = randint(0, 1024-128, (random_gen_count, 2), dtype=uint16)
+                    patch_indices = randint(0, patches_count, random_gen_count, dtype=uint16)
+                    norm_odds = randint(0, 100, random_gen_count, dtype=uint8)
+
+                    i = 0
+
+            yield batches_pan_ndvi, batches_anno_bound
+
+    from unet.config import input_shape, batch_size
+
+    train_generator = uniform_random_patch_generator(training_frames)
+    val_generator = uniform_random_patch_generator(validation_frames)
+    test_generator = uniform_random_patch_generator(test_frames)
+
+    debug = False
     if debug:
         from unet.visualize import display_images
         train_images, real_label = next(train_generator)
-        ann = real_label[:,:,:,0]
-        wei = real_label[:,:,:,1]
+        ann = real_label[..., 0]
+        wei = real_label[..., 1]
         #overlay of annotation with boundary to check the accuracy
         #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight
         overlay = ann + wei
-        overlay = overlay[:,:,:,newaxis]
+        overlay = overlay[..., newaxis]
         display_images(concatenate((train_images, real_label), axis = -1))
+
+    print("Loading Tensorflow")
+
+    environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+    environ["TF_GPU_THREAD_MODE"] = "gpu_private" #NOTE(Jesse): Seperate I/O and Compute CPU thread scheduling.
+
+    #TODO(Jesse): Are these necessary if jit_compile=True is specified in model.compile?
+    #environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices:--xla_gpu_persistent_cache_dir=C:/Users/jrmeyer3/Desktop/NASA/trees/:"
+    #environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit"
+
+    from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
+    from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
+    from unet.UNet import UNet
+    from unet.optimizers import adam
 
     model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
     post_train = False
@@ -135,7 +193,7 @@ def main():
     else:
         model_weights_fp = join(training_data_fp, "unet_cnn_model_weights.h5")
 
-    model.compile(optimizer=adaDelta, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy])
+    model.compile(optimizer=adam, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy], jit_compile=True)
 
     checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only = True)
     tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False,
@@ -143,7 +201,7 @@ def main():
 
     print("Start training")
     model.fit(train_generator,
-                epochs=10, steps_per_epoch=25,
+                epochs=10, steps_per_epoch=100,
                 initial_epoch = 9 if post_train else 0,
                 validation_data=val_generator,
                 validation_steps=len(validation_frame_indices) * 10,
@@ -153,10 +211,7 @@ def main():
     print(f"Took {stop - start} minutes.")
 
     if debug:
-        batch = zeros((batch_size, 256, 256, 2), dtype=float32)
-        for i in range(batch_size):
-            batch[i::] = frames[i].img[:256, :256, :] #TODO(Jesse): Use newer input specification & use standardize
-
+        batch, _ = next(test_generator)
         predictions = model.predict(batch)
         for p in predictions:
             p[p > 0.5] = 1

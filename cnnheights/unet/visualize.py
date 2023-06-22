@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt  # plotting tools
-from matplotlib.patches import Polygon
 def display_images(img, plot_path:str=None):
     """Display the given set of images, optionally with titles.
     images: array of image tensors in Batch * Height * Width * Channel format.
@@ -18,8 +16,8 @@ def display_images(img, plot_path:str=None):
     for i in range(rows):
         if cols > 1:
             for j in range(cols):
-                axs[i,j].axis('off')
-                axs[i,j].imshow(img[i,...,j])
+                axs[i, j].axis('off')
+                axs[i, j].imshow(img[i, ..., j])
         else:
             axs[i].axis('off')
             axs[i].imshow(img[i,...]) 
