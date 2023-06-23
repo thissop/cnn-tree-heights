@@ -1,10 +1,9 @@
 #NOTE(Jesse): The premise of this script is to train a CNN with the provided prepared training data.
 # The inputs are assumed to have been produced using the stage_1 script
 
-training_data_fp = "C:\\Users\\jrmeyer3\\Documents\\cnn-input"
+training_data_fp = "C:\\Users\\jrmeyer3\\cnn-tree-heights\\training_data"
 model_weights_fp = "C:\\Users\\jrmeyer3\\Documents\\cnn-input\\unet_cnn_model_weights.h5" #NOTE(Jesse): Set this to the directory of a previously trained UNET for post-training, otherwise we output to the training data fp the trained model.
 
-training_data_fp = "/Users/jrmeyer3/cnn-tree-heights/training_data"
 model_weights_fp = None
 
 if __name__ != "__main__":
@@ -31,16 +30,17 @@ def main():
 
     import rasterio
     from json import dump
+    from random import shuffle
     from unet.frame_utilities import standardize_without_resize
-    from numpy import newaxis, zeros, float32, uint16, uint8, arange, concatenate, where
-    from numpy.random import shuffle, default_rng
+    from numpy import newaxis, zeros, float32, uint16, uint8, concatenate, where, sqrt
+    from numpy.random import default_rng
 
     training_files = listdir(training_data_fp)
     assert len(training_files) > 0
 
-    frames = []
-    frame_image_names = []
     print("Loading training data")
+
+    frames = []
     for tf in training_files:
         if not tf.endswith('.tif'):
             continue
@@ -50,36 +50,28 @@ def main():
 
         assert "cutout" in tf, tf
 
-        #NOTE(Jesse): From the ID number we can grab all associated training data.
-        ndvi_pan_fp = join(training_data_fp, tf)
-        annotation_and_boundary_fp = join(training_data_fp, tf.replace(".tif", "_annotation_and_boundary.tif"))
-
-        with rasterio.open(ndvi_pan_fp) as r_ds:
-            pan_img = r_ds.read(1)
-            ndvi_img = r_ds.read(2)
-            
-        annotation_boundary_img = rasterio.open(annotation_and_boundary_fp).read(1)
-
-        assert ndvi_img.dtype == uint16
-        assert pan_img.shape == (1024, 1024), f"Expected shape of 1024x1024, got {pan_img.shape}"
-        assert pan_img.shape == ndvi_img.shape == annotation_boundary_img.shape
-
         pan_ndvi  = zeros((1024, 1024, 2), dtype=float32)
         anno_boun = zeros((1024, 1024, 2), dtype=float32)
-        pan_ndvi[..., 0] = standardize_without_resize(pan_img)
-        pan_ndvi[..., 1] = standardize_without_resize(ndvi_img)
+
+        with rasterio.open(join(training_data_fp, tf)) as r_ds:
+            assert r_ds.dtypes == ('uint16', 'uint16')
+            assert r_ds.shape == (1024, 1024), f"Expected shape of 1024x1024, got {r_ds.shape}"
+
+            pan_ndvi[..., 0] = standardize_without_resize(r_ds.read(1))
+            pan_ndvi[..., 1] = standardize_without_resize(r_ds.read(2))
+            
+        annotation_boundary_img = rasterio.open(join(training_data_fp, tf.replace(".tif", "_annotation_and_boundary.tif"))).read(1)
+        assert annotation_boundary_img.shape == (1024, 1024)
 
         anno_boun[..., 0] = where(annotation_boundary_img == 1, 1, 0)  #NOTE(Jesse): Is there a simpler computation for this?  It's just masking with a scale.
-        anno_boun[..., 1] = where(annotation_boundary_img == 2, 10, 0) #NOTE(Jesse): Set boundary pixels to 10
+        anno_boun[..., 1] = where(annotation_boundary_img == 2, 10, 1) #NOTE(Jesse): Set boundary pixels to 10, otherwise 1 (as per Ankit's specification)
 
-        frames.append((pan_ndvi, anno_boun))
-        frame_image_names.append(tf)
+        frames.append((pan_ndvi, anno_boun, tf))
 
     frames_count = len(frames)
     assert frames_count > 0
 
-    shuffled_indices = arange(frames_count)
-    shuffle(shuffled_indices)
+    shuffle(frames)
 
     training_ratio = 0.8
     validation_ratio = 0.1
@@ -90,23 +82,17 @@ def main():
     validation_frames_count = int((frames_count * validation_ratio))
     #NOTE(Jesse): The test frame count is just what's left over from training and validation.
 
-    training_frame_indices   = shuffled_indices[:training_frames_count]
-    validation_frame_indices = shuffled_indices[training_frames_count:training_frames_count + validation_frames_count]
-    test_frame_indices = shuffled_indices[training_frames_count + validation_frames_count:]
-
-    training_frames = [frames[i] for i in training_frame_indices]
-    validation_frames = [frames[i] for i in validation_frame_indices]
-    test_frames = [frames[i] for i in test_frame_indices]
+    training_frames   = frames[:training_frames_count]
+    validation_frames = frames[training_frames_count:training_frames_count + validation_frames_count]
+    test_frames = frames[training_frames_count + validation_frames_count:]
 
     with open(join(training_data_fp, 'frames_list.json'), 'w') as f:
         dump({
         'base_file_path': training_data_fp,
-        'training': [frame_image_names[i] for i in training_frame_indices],
-        'validation': [frame_image_names[i] for i in validation_frame_indices],
-        'test': [frame_image_names[i] for i in test_frame_indices],
+        'training': [i[2] for i in training_frames],
+        'validation': [i[2] for i in validation_frames],
+        'test': [i[2] for i in test_frames],
         }, f)
-
-        frame_image_names = None
 
     def uniform_random_patch_generator(patches, normalization_odds=0.0):
         random_gen_count = 1024
@@ -115,12 +101,13 @@ def main():
 
         patches_count = len(patches)
 
-        patch_offsets = randint(0, 1024-128, (random_gen_count, 2), dtype=uint16)
+        batch_xy_size = 128
+        patch_offsets = randint(0, 1024 - batch_xy_size, (random_gen_count, 2), dtype=uint16)
         patch_indices = randint(0, patches_count, random_gen_count, dtype=uint16)
 
-        batch_count = 32
-        batches_pan_ndvi = zeros((batch_count, 128, 128, 2), dtype=float32)
-        batches_anno_bound = zeros((batch_count, 128, 128, 2), dtype=float32)
+        batch_count = 96
+        batches_pan_ndvi = zeros((batch_count, batch_xy_size, batch_xy_size, 2), dtype=float32)
+        batches_anno_bound = zeros((batch_count, batch_xy_size, batch_xy_size, 2), dtype=float32)
 
         normalization_odds = int(normalization_odds * 100)
         assert normalization_odds <= 100, normalization_odds
@@ -133,20 +120,21 @@ def main():
         while True:
             for b in range(batch_count):
                 (y, x) = patch_offsets[i]
-                pan_ndvi, anno_boun = patches[patch_indices[i]]
-                pan_ndvi  = pan_ndvi[y : y + 128, x: x + 128, ...]
-                anno_boun = anno_boun[y : y + 128, x: x + 128, ...]
+                pan_ndvi, anno_boun, _ = patches[patch_indices[i]]
+                pan_ndvi  =  pan_ndvi[y : y + batch_xy_size, x: x + batch_xy_size, ...]
+                anno_boun = anno_boun[y : y + batch_xy_size, x: x + batch_xy_size, ...]
 
-                if norm_odds:
+                if norm_odds is not None:
                     if norm_odds[i] > normalization_odds:
-                        pan_ndvi = standardize_without_resize(pan_ndvi) #NOTE(Jesse): Normalize PAN / NDVI of the patch
+                        pan_ndvi[..., 0] = standardize_without_resize(pan_ndvi[..., 0])
+                        pan_ndvi[..., 1] = standardize_without_resize(pan_ndvi[..., 1])
 
                 batches_pan_ndvi[b, ...]   = pan_ndvi
                 batches_anno_bound[b, ...] = anno_boun
 
                 i += 1
                 if i == random_gen_count:
-                    patch_offsets = randint(0, 1024-128, (random_gen_count, 2), dtype=uint16)
+                    patch_offsets = randint(0, 1024 - batch_xy_size, (random_gen_count, 2), dtype=uint16)
                     patch_indices = randint(0, patches_count, random_gen_count, dtype=uint16)
                     norm_odds = randint(0, 100, random_gen_count, dtype=uint8)
 
@@ -154,15 +142,13 @@ def main():
 
             yield batches_pan_ndvi, batches_anno_bound
 
-    from unet.config import input_shape, batch_size
-
     train_generator = uniform_random_patch_generator(training_frames)
     val_generator = uniform_random_patch_generator(validation_frames)
     test_generator = uniform_random_patch_generator(test_frames)
 
+    from unet.visualize import display_images
     debug = False
     if debug:
-        from unet.visualize import display_images
         train_images, real_label = next(train_generator)
         ann = real_label[..., 0]
         wei = real_label[..., 1]
@@ -170,7 +156,7 @@ def main():
         #5 images in each row are: pan, ndvi, annotation, weight(boundary), overlay of annotation with weight
         overlay = ann + wei
         overlay = overlay[..., newaxis]
-        display_images(concatenate((train_images, real_label), axis = -1))
+        display_images(concatenate((train_images, real_label, overlay), axis = -1), training_data_fp)
 
     print("Loading Tensorflow")
 
@@ -184,16 +170,17 @@ def main():
     from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
     from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
     from unet.UNet import UNet
-    from unet.optimizers import adam
+    from unet.optimizers import adaDelta
+    from unet.config import batch_size, normalize, input_shape
 
-    model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
+    model = UNet((batch_size, *input_shape), 1, weight_file=model_weights_fp)
     post_train = False
     if model_weights_fp:
         post_train = True
     else:
         model_weights_fp = join(training_data_fp, "unet_cnn_model_weights.h5")
 
-    model.compile(optimizer=adam, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy], jit_compile=True)
+    model.compile(optimizer=adaDelta, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy], jit_compile=True)
 
     checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only = True)
     tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False,
@@ -204,19 +191,19 @@ def main():
                 epochs=10, steps_per_epoch=100,
                 initial_epoch = 9 if post_train else 0,
                 validation_data=val_generator,
-                validation_steps=len(validation_frame_indices) * 10,
+                validation_steps=int(sqrt(frames_count) + 0.5),
                 callbacks=[checkpoint, tensorboard], use_multiprocessing=False)
 
     stop = time() / 60
-    print(f"Took {stop - start} minutes.")
+    print(f"Took {stop - start} minutes to train.")
 
-    if debug:
-        batch, _ = next(test_generator)
-        predictions = model.predict(batch)
-        for p in predictions:
-            p[p > 0.5] = 1
-            p[p <= 0.5] = 0
+    #TODO(Jesse): Analyze test set
+    batch, anno = next(test_generator)
+    predictions = model.predict(batch, batch_size=batch_size)
+    for p in predictions:
+        p[p > 0.5] = 1
+        p[p <= 0.5] = 0
 
-        display_images(predictions)
+    display_images(concatenate((batch, predictions, anno), axis = -1), training_data_fp)
 
 main()

@@ -89,7 +89,7 @@ class DataGenerator:
             normalize (float): Probability with which a frame is normalized.
         """
         patches = []
-        for i in range(BATCH_SIZE):
+        for _ in range(BATCH_SIZE):
             frame = np.random.choice(self.frames)
             patch = frame.random_patch(self.patch_size, normalize)
             patches.append(patch)

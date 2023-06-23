@@ -91,7 +91,7 @@ def UNet(input_shape, input_label_channel_count:int, layer_count=64, regularizer
 
 def attention_up_and_concat(down_layer, layer):
     in_channel = down_layer.get_shape().as_list()[3]
-    up = layers.UpSampling2D(size=(2, 2))(down_layer)
+    up = layers.UpSampling2D(size=(2, 2), interpolation="bilinear")(down_layer)
     layer = attention_block_2d(x=layer, g=up, inter_channel=in_channel // 4)
     my_concat = layers.Lambda(lambda x: K.concatenate([x[0], x[1]], axis=3))
     concat = my_concat([up, layer])
