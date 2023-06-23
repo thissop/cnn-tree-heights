@@ -150,18 +150,17 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     allAreasWithPolygons = [] 
 
-    print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)]) 
+    #print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)]) 
     write_counters = []
     for i in range(len(area_files)): 
-        print(area_files[i])
+        print(annotation_files[i])
+        annotations_file = annotation_files[i]
         trainingArea = gps.read_file(area_files[i])
-        trainingPolygon = gps.read_file(annotation_files[i])
-
-        print(trainingPolygon)
-
+        trainingPolygon = gps.read_file(annotations_file)
+    
         #trainingPolygon['is_valid'] = trainingPolygon['geometry'].is_valid
         #trainingPolygon = trainingPolygon[trainingPolygon['is_valid']]
-        #trainingPolygon.to_file(annotation_files[i])
+        #trainingPolygon.to_file(area_files)
 
         write_counters.append(int(area_files[i].split('_')[-1].split('.')[0]))
 
@@ -169,7 +168,7 @@ def preprocess(input_data_dir:str, output_data_dir:str):
         #print(f'Polygons will be assigned to training areas in the next steps.') 
 
         #Check if the training areas and the training polygons have the same crs
-        if trainingArea.crs  != trainingPolygon.crs:
+        if trainingArea.crs != trainingPolygon.crs:
             print('Training area CRS does not match training_polygon CRS')
             targetCRS = trainingPolygon.crs #Areas are less in number so conversion should be faster
             trainingArea = trainingArea.to_crs(targetCRS)
