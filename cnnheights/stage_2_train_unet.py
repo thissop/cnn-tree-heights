@@ -94,6 +94,9 @@ def main():
         'test': [i[2] for i in test_frames],
         }, f)
 
+    #TODO(Jesse): Create a "sequential" generator that:
+    # Iterates 1 by 1 through the patches and
+    # increments through the entire patch in batch_xy_size steps
     def uniform_random_patch_generator(patches, normalization_odds=0.0):
         random_gen_count = 1024
         rng = default_rng()
@@ -163,9 +166,7 @@ def main():
     environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
     environ["TF_GPU_THREAD_MODE"] = "gpu_private" #NOTE(Jesse): Seperate I/O and Compute CPU thread scheduling.
 
-    #TODO(Jesse): Are these necessary if jit_compile=True is specified in model.compile?
-    #environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices:--xla_gpu_persistent_cache_dir=C:/Users/jrmeyer3/Desktop/NASA/trees/:"
-    #environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit"
+    #environ["TF_XLA_FLAGS"] = "--xla_gpu_persistent_cache_dir=C:/Users/jrmeyer3/Desktop/NASA/trees/:"
 
     from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
     from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
@@ -182,9 +183,8 @@ def main():
 
     model.compile(optimizer=adaDelta, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy], jit_compile=True)
 
-    checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only = True)
-    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=0, write_graph=True, write_grads=False, write_images=False,
-                              embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None, embeddings_data=None, update_freq='epoch')
+    checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only=True)
+    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=1)
 
     print("Start training")
     model.fit(train_generator,
@@ -198,12 +198,14 @@ def main():
     print(f"Took {stop - start} minutes to train.")
 
     #TODO(Jesse): Analyze test set
-    batch, anno = next(test_generator)
-    predictions = model.predict(batch, batch_size=batch_size)
-    for p in predictions:
-        p[p > 0.5] = 1
-        p[p <= 0.5] = 0
-
-    display_images(concatenate((batch, predictions, anno), axis = -1), training_data_fp)
+    # This process should broadly work the following way:
+    # 1. Process the test set exhaustively (not via uniform randomness), so make a new generator that is fully deterministic and linear in its iteration through the patches
+    # 3. Cluster the loss_and_metrics with the following variables of the patch (and perhaps others):
+    #        Lat, Long, CHIRPS, DEM (resampled to 30m), every cutline metadata item, and tree count / area from the 2022 density tifs.
+    # 3.a. I don't know what format to save the clustering data out as, but we want to be able to query it across all test patches.
+    # 4. Save out a VRT of Green, Yellow, or Red pixel image of the patch depending on how well the patch was predicted given the confusion matrix
+    #
+    # The generator should terminate on its own, which will remove the need for the 'steps' param below.
+    loss_and_metrics = model.evaluate(test_generator, steps=len(test_frames) * 64, return_dict=True)
 
 main()
