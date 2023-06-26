@@ -14,10 +14,14 @@ if __name__ != "__main__":
 
 def main():
     print("Import")
+    from time import time
+    from os import rename, environ, remove
     from os.path import isfile, isdir, normpath, join
     from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, mean, std
     from osgeo import gdal, ogr
-    import sozipfile.sozipfile as zipfile #NOTE(Jesse): pip install sozipfile, #TODO(Jesse): See TODO at the bottom of the script
+    import sozipfile.sozipfile as zipfile
+
+    from gc import collect
 
     gdal.UseExceptions()
     ogr.UseExceptions()
@@ -45,12 +49,17 @@ def main():
     assert isfile(model_weights_fp), model_weights_fp
     assert isdir(out_fp), out_fp
 
+    environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+    environ["TF_GPU_THREAD_MODE"] = "gpu_private" #NOTE(Jesse): Seperate I/O and Compute CPU thread scheduling.
+
+    #environ["TF_XLA_FLAGS"] = "--xla_gpu_persistent_cache_dir=C:/Users/jrmeyer3/Desktop/NASA/trees/:"
+
+    print("UNET")
     from unet.UNet import UNet
     from unet.config import input_shape, batch_size
 
-    #NOTE(Jesse): batch_size is how many 256x256 patches the CNN predicts in 1 go
-    print("UNET")
     model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
+    model.compile(jit_compile=True)
 
     tile_ds = gdal.Open(tile_fp)
     tile_x = tile_ds.RasterXSize
@@ -59,6 +68,8 @@ def main():
     if tile_fp.endswith("mosaic.tif"):
         assert tile_x == 32768
         assert tile_x == tile_y
+
+    tile_fn = tile_fp.split('/')[-1].split('.')[0]
 
     geotransform = tile_ds.GetGeoTransform()
     out_projection = tile_ds.GetProjection()
@@ -69,12 +80,12 @@ def main():
 
     tile_ds = None
 
-    overlap = 32
-    step = 256 - overlap
+    overlap = 16
+    step = 128 - overlap
     #NOTE(Jesse): batch_count is just how much data we pre-package to send to the CNN.  predict() will cut it into individual batches for us
     # Here, we cut the mosaic tile into rows which span the whole tile, and each such row is 1 batch
     batch_count = int(ceil(tile_x / step))
-    batch = zeros((batch_count, 256, 256, 2), dtype=float32)
+    batch = zeros((batch_size, 128, 128, 2), dtype=float32)
     out_predictions = zeros((tile_y, tile_x), dtype=uint8)
 
     def standardize(i):
@@ -88,37 +99,58 @@ def main():
         else:
             s_i = (f_i - mean(f_i)) / std(f_i)
 
-        if s_i.shape != (256, 256): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
-            s_i.resize((256, 256), refcheck=False)
+        if s_i.shape != (128, 128): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
+            s_i.resize((128, 128), refcheck=False)
 
         return s_i
 
     print("Predict")
+    start = time()
+    batch_predict = model.predict_on_batch
+
+    batch_idx = 0
+    y0_out = 0
+    y1_out = 128
+    x0_out = 0
+    x1_out = 128
     for y0 in range(0, tile_y, step):
-        y1 = min(y0 + 256, tile_y)
+        y1 = min(y0 + 128, tile_y)
 
-        pan_strip = pan[y0:y1, :]
-        ndvi_strip = ndvi[y0:y1, :]
-        for batch_idx, x0 in enumerate(range(0, tile_x, step)):
-            x1 = min(x0 + 256, tile_x)
+        for x0 in range(0, tile_x, step):
+            x1 = min(x0 + 128, tile_x)
 
-            batch[batch_idx, ..., 0] =  standardize(pan_strip[:, x0:x1])
-            batch[batch_idx, ..., 1] = standardize(ndvi_strip[:, x0:x1])
+            batch[batch_idx, ..., 0] =  standardize(pan[y0:y1, x0:x1])
+            batch[batch_idx, ..., 1] = standardize(ndvi[y0:y1, x0:x1])
 
-        predictions = squeeze(model.predict(batch, batch_size=16)) * 100
-        batch.fill(0)
+            batch_idx += 1
+            if batch_idx == batch_size:
+                batch_idx = 0
 
-        out_predictions_strip = out_predictions[y0:y1, :]
-        for i, x0 in enumerate(range(0, tile_x, step)):
-            x1 = min(x0 + 256, tile_x)
+                predictions = squeeze(batch_predict(batch)) * 100
+                batch.fill(0)
 
-            op = out_predictions_strip[:, x0:x1]
-            p = predictions[i].astype(uint8)
+                for p in predictions:
+                    p = p.astype(uint8)
+                    op = out_predictions[y0_out:y1_out, x0_out:x1_out]
 
-            if op.shape != p.shape: #NOTE(Jesse): Handle fractional step patches
-                p.resize(op.shape, refcheck=False)
+                    if p.shape != op.shape: #NOTE(Jesse): Handle fractional step patches
+                        p.resize(op.shape, refcheck=False)
 
-            out_predictions_strip[:, x0:x1] = maximum(op, p)
+                    out_predictions[y0_out:y1_out, x0_out:x1_out] = maximum(op, p)
+
+                    x0_out += step
+                    x1_out = min(x0_out + 128, tile_x)
+                    assert x0_out != x1_out
+                    if x0_out >= tile_x:
+                        x0_out = 0
+                        x1_out = 128
+
+                        y0_out += step
+                        y1_out = min(y0_out + 128, tile_y)
+                        assert y1_out != y0_out
+
+    stop = time()
+    print((stop-start)/60)
 
     no_data_value = 255
     out_predictions[(ndvi == 0) & (out_predictions <= 50)] = no_data_value #NOTE(Jesse): Transfer no-data value from mosaic tile to these results.
@@ -132,6 +164,8 @@ def main():
     ndvi = None
     out_predictions_strip = None
     batch = None
+
+    collect()
 
     nn_mem_ds = gdal.GetDriverByName("MEM").Create('', xsize=tile_x, ysize=tile_y, bands=1, eType=gdal.GDT_Byte)
     assert nn_mem_ds
@@ -177,7 +211,8 @@ def main():
         #ogr_mem_lyr.CommitTransaction()
 
     print("Save out")
-    ogr_dsk_ds = ogr.GetDriverByName("GPKG").CopyDataSource(ogr_mem_ds, join(out_fp, f"{label_name}.gpkg"))
+    out_tmp_fn = f"{label_name}_tmp.gpkg"
+    ogr_dsk_ds = ogr.GetDriverByName("GPKG").CopyDataSource(ogr_mem_ds, join(out_fp, out_tmp_fn))
     ogr_mem_lyr = None
     ogr_mem_ds = None
     ogr_dsk_ds = None
@@ -185,22 +220,21 @@ def main():
     disk_create_options: list = ['COMPRESS=ZSTD', 'ZSTD_LEVEL=1', 'INTERLEAVE=BAND', 'Tiled=YES', 'NUM_THREADS=ALL_CPUS', 'SPARSE_OK=True', 'PREDICTOR=2']
     nn_mem_band.WriteArray(out_predictions)
     out_predictions = None
-    nn_disk_ds = gdal.GetDriverByName('GTiff').CreateCopy(join(out_fp, 'NN_classification.tif'), nn_mem_ds, options=disk_create_options)
+
+    nn_disk_ds = gdal.GetDriverByName('GTiff').CreateCopy(join(out_fp, 'NN_classification_tmp.tif'), nn_mem_ds, options=disk_create_options)
     nn_mem_ds = None
     nn_disk_ds = None
 
-    #TODO(Jesse): Save outputs to Seek Optimized zipfile archive (skip compression for .tif files as they are already zstd compressed). See https://github.com/sozip/sozipfile
-    # done? 
-
-    # Create a Seek Optimized zipfile
-    zip_filename = join(out_fp, 'output.zip')
-
-    with zipfile.ZipFile(zip_filename, 'w',
+    zip_tmp_fn = join(out_fp, f'{tile_fn}_heights_tmp.zip')
+    with zipfile.ZipFile(zip_tmp_fn, 'w',
                         compression=zipfile.ZIP_DEFLATED,
                         chunk_size=zipfile.SOZIP_DEFAULT_CHUNK_SIZE) as myzip:
-        # Add the GeoPackage file to the zipfile
-        myzip.write(join(out_fp, f"{label_name}.gpkg")), 
-        # Add the TIFF file to the zipfile
-        myzip.write(join(out_fp, 'NN_classification.tif'))
-    
+
+        myzip.write(join(out_fp, out_tmp_fn), arcname=out_tmp_fn.replace("_tmp", ""))
+        myzip.write(join(out_fp, "NN_classification_tmp.tif"), arcname="NN_classification.tif")
+
+    rename(zip_tmp_fn, zip_tmp_fn.replace("_tmp", ""))
+    remove(join(out_fp, out_tmp_fn))
+    remove(join(out_fp, 'NN_classification_tmp.tif'))
+
 main()
