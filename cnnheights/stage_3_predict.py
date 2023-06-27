@@ -17,7 +17,7 @@ def main():
     from time import time
     from os import rename, environ, remove
     from os.path import isfile, isdir, normpath, join
-    from numpy import zeros, float32, ceil, uint8, maximum, nan, nanmean, nanstd, squeeze, mean, std
+    from numpy import zeros, float32, uint8, maximum, nan, nanmean, nanstd, squeeze, mean, std
     from osgeo import gdal, ogr
     import sozipfile.sozipfile as zipfile
 
@@ -58,6 +58,9 @@ def main():
     from unet.UNet import UNet
     from unet.config import input_shape, batch_size
 
+    assert input_shape[0] == input_shape[1]
+    shape_xy = input_shape[0]
+
     model = UNet([batch_size, *input_shape], 1, weight_file=model_weights_fp)
     model.compile(jit_compile=True)
 
@@ -80,16 +83,15 @@ def main():
 
     tile_ds = None
 
-    overlap = 16
-    step = 128 - overlap
-    #NOTE(Jesse): batch_count is just how much data we pre-package to send to the CNN.  predict() will cut it into individual batches for us
-    # Here, we cut the mosaic tile into rows which span the whole tile, and each such row is 1 batch
-    batch_count = int(ceil(tile_x / step))
-    batch = zeros((batch_size, 128, 128, 2), dtype=float32)
+    overlap_xy = int(shape_xy * 0.875) #NOTE(Jesse): ~12% overlap between patches fed to the UNet.
+    step_xy = input_shape[0] - overlap_xy
+    batch = zeros((batch_size, *input_shape), dtype=float32)
     out_predictions = zeros((tile_y, tile_x), dtype=uint8)
 
     def standardize(i):
-        f_i = i.astype(float32)
+        nonlocal shape_xy, float32
+
+        f_i = i.astype(float32) if i.dtype != float32 else i
         has_nans = f_i == 0
         if has_nans.any():
             f_i[has_nans] = nan
@@ -99,25 +101,21 @@ def main():
         else:
             s_i = (f_i - mean(f_i)) / std(f_i)
 
-        if s_i.shape != (128, 128): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
-            s_i.resize((128, 128), refcheck=False)
+        if s_i.shape != (shape_xy, shape_xy): #NOTE(Jesse): Occurs on the last xy step (a partial final step)
+            s_i.resize((shape_xy, shape_xy), refcheck=False)
 
         return s_i
 
     print("Predict")
-    start = time()
     batch_predict = model.predict_on_batch
 
-    batch_idx = 0
-    y0_out = 0
-    y1_out = 128
-    x0_out = 0
-    x1_out = 128
-    for y0 in range(0, tile_y, step):
-        y1 = min(y0 + 128, tile_y)
+    y0_out = x0_out = batch_idx = 0
+    y1_out = x1_out = shape_xy
+    for y0 in range(0, tile_y, step_xy):
+        y1 = min(y0 + shape_xy, tile_y)
 
-        for x0 in range(0, tile_x, step):
-            x1 = min(x0 + 128, tile_x)
+        for x0 in range(0, tile_x, step_xy):
+            x1 = min(x0 + shape_xy, tile_x)
 
             batch[batch_idx, ..., 0] =  standardize(pan[y0:y1, x0:x1])
             batch[batch_idx, ..., 1] = standardize(ndvi[y0:y1, x0:x1])
@@ -137,32 +135,26 @@ def main():
                         p.resize(op.shape, refcheck=False)
 
                     out_predictions[y0_out:y1_out, x0_out:x1_out] = maximum(op, p)
+                    p = None
 
-                    x0_out += step
-                    x1_out = min(x0_out + 128, tile_x)
+                    x0_out += step_xy
+                    x1_out = min(x0_out + shape_xy, tile_x)
                     assert x0_out != x1_out
                     if x0_out >= tile_x:
                         x0_out = 0
-                        x1_out = 128
+                        x1_out = shape_xy
 
-                        y0_out += step
-                        y1_out = min(y0_out + 128, tile_y)
+                        y0_out += step_xy
+                        y1_out = min(y0_out + shape_xy, tile_y)
                         assert y1_out != y0_out
-
-    stop = time()
-    print((stop-start)/60)
 
     no_data_value = 255
     out_predictions[(ndvi == 0) & (out_predictions <= 50)] = no_data_value #NOTE(Jesse): Transfer no-data value from mosaic tile to these results.
 
     model = None
-
     predictions = None
-    pan_strip = None
     pan = None
-    ndvi_strip = None
     ndvi = None
-    out_predictions_strip = None
     batch = None
 
     collect()
@@ -225,7 +217,7 @@ def main():
     nn_mem_ds = None
     nn_disk_ds = None
 
-    zip_tmp_fn = join(out_fp, f'{tile_fn}_heights_tmp.zip')
+    zip_tmp_fn = join(out_fp, f'{tile_fn}_{label_name}_tmp.zip')
     with zipfile.ZipFile(zip_tmp_fn, 'w',
                         compression=zipfile.ZIP_DEFLATED,
                         chunk_size=zipfile.SOZIP_DEFAULT_CHUNK_SIZE) as myzip:
