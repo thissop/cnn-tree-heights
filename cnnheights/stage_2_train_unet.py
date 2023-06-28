@@ -97,20 +97,24 @@ def main():
     #TODO(Jesse): Create a "sequential" generator that:
     # Iterates 1 by 1 through the patches and
     # increments through the entire patch in batch_xy_size steps
+
+    from unet.config import batch_size, normalize, input_shape
     def uniform_random_patch_generator(patches, normalization_odds=0.0):
+        nonlocal input_shape, batch_size, normalize
+
         random_gen_count = 1024
         rng = default_rng()
         randint = rng.integers
 
         patches_count = len(patches)
 
-        batch_xy_size = 128
+        batch_xy_size = input_shape[0]
         patch_offsets = randint(0, 1024 - batch_xy_size, (random_gen_count, 2), dtype=uint16)
         patch_indices = randint(0, patches_count, random_gen_count, dtype=uint16)
 
-        batch_count = 96
-        batches_pan_ndvi = zeros((batch_count, batch_xy_size, batch_xy_size, 2), dtype=float32)
-        batches_anno_bound = zeros((batch_count, batch_xy_size, batch_xy_size, 2), dtype=float32)
+        batch_count = batch_size
+        batches_pan_ndvi = zeros((batch_count, *input_shape), dtype=float32)
+        batches_anno_bound = zeros((batch_count, *input_shape), dtype=float32)
 
         normalization_odds = int(normalization_odds * 100)
         assert normalization_odds <= 100, normalization_odds
@@ -168,11 +172,10 @@ def main():
 
     #environ["TF_XLA_FLAGS"] = "--xla_gpu_persistent_cache_dir=C:/Users/jrmeyer3/Desktop/NASA/trees/:"
 
-    from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
+    from tensorflow.keras.callbacks import ModelCheckpoint#, TensorBoard
     from unet.loss import tversky, dice_coef, dice_loss, specificity, sensitivity, accuracy
     from unet.UNet import UNet
     from unet.optimizers import adaDelta
-    from unet.config import batch_size, normalize, input_shape
 
     model = UNet((batch_size, *input_shape), 1, weight_file=model_weights_fp)
     post_train = False
@@ -184,15 +187,15 @@ def main():
     model.compile(optimizer=adaDelta, loss=tversky, metrics=[dice_coef, dice_loss, specificity, sensitivity, accuracy], jit_compile=True)
 
     checkpoint = ModelCheckpoint(model_weights_fp, monitor='val_loss', verbose=1, save_best_only=True, mode='min', save_weights_only=True)
-    tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=1)
+    #tensorboard = TensorBoard(log_dir=training_data_fp, histogram_freq=1)
 
     print("Start training")
     model.fit(train_generator,
-                epochs=10, steps_per_epoch=100,
+                epochs=15, steps_per_epoch=100,
                 initial_epoch = 9 if post_train else 0,
                 validation_data=val_generator,
                 validation_steps=int(sqrt(frames_count) + 0.5),
-                callbacks=[checkpoint, tensorboard], use_multiprocessing=False)
+                callbacks=[checkpoint], use_multiprocessing=False)
 
     stop = time() / 60
     print(f"Took {stop - start} minutes to train.")
@@ -206,6 +209,7 @@ def main():
     # 4. Save out a VRT of Green, Yellow, or Red pixel image of the patch depending on how well the patch was predicted given the confusion matrix
     #
     # The generator should terminate on its own, which will remove the need for the 'steps' param below.
-    loss_and_metrics = model.evaluate(test_generator, steps=len(test_frames) * 64, return_dict=True)
+    loss_and_metrics = model.evaluate(test_generator, steps=len(test_frames) * 128, return_dict=True)
+    print(loss_and_metrics)
 
 main()

@@ -83,8 +83,7 @@ def main():
 
     tile_ds = None
 
-    overlap_xy = int(shape_xy * 0.875) #NOTE(Jesse): ~12% overlap between patches fed to the UNet.
-    step_xy = input_shape[0] - overlap_xy
+    step_xy = int(shape_xy * 0.875) #NOTE(Jesse): ~12% overlap between patches fed to the UNet.
     batch = zeros((batch_size, *input_shape), dtype=float32)
     out_predictions = zeros((tile_y, tile_x), dtype=uint8)
 
