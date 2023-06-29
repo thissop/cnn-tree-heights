@@ -104,148 +104,6 @@ def sample_background(input_tif:str, output_dir:str, counter:int=0, plot_path:st
 
     cutout_raster.close()
 
-def old_sample_background(input_tif:str, output_dir:str, crs:str, key:str=None, counter:int=0, plot_path:str=None, sample_dim:tuple=(1024,1024), dpi=350):
-    r'''
-
-    TO DO 
-    -----
-
-    Notes
-    -----
-    - note for jesse: opening from this window saves crazy memory. 
-    - FIX THE vector background!!
-
-    '''
-    import rasterio 
-
-    # randomly choose left corner 
-    # eventually, make sure no overlap with other regions 
-
-    import matplotlib.pyplot as plt
-    from rasterio import plot
-    from rasterio.windows import transform
-    import rasterio
-    from shapely.geometry import Polygon
-    import os 
-    import numpy as np
-    import geopandas as gpd 
-    from cnnheights.plotting import save_fig
-    from shapely.geometry import box
-
-    dataset = rasterio.open(input_tif) 
-
-    dims = (dataset.width, dataset.height) 
-
-    extant_key = False 
-    if key is not None and os.path.exists(key):
-        extant_key = True 
-
-    output_dir = os.path.join(output_dir, f'cutout_{counter}')
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
-
-    overlapping = True 
-    while overlapping: 
-
-        x1, y1 = (np.random.randint(0,dims[0]-sample_dim[0]), np.random.randint(0,dims[1]-sample_dim[1])) ## FIXX!! 
-        x2, y2 = (x1+sample_dim[0], y1+sample_dim[1])
-
-        window = rasterio.windows.Window(x1, y1, sample_dim[0], sample_dim[1]) 
-        img = dataset.read(window=window) 
-        # read both layers with dataset.read(window=window)
-        # read first layer with dataset.read(1, window=window)
-        # read second layer with dataset.read(2, window=window)
-     
-        window_transform = transform(window, dataset.transform) 
-        extent = plot.plotting_extent(img, window_transform) 
-        
-        x1 = extent[0]
-        #x2 = extent[1], #y2 = extent[3]
-        y1 = extent[2]
-
-        output_tif = os.path.join(output_dir, f'cutout_{counter}.tif')
-
-        with rasterio.open(output_tif, 'w',
-                driver='GTiff', width=sample_dim[0], height=sample_dim[1], count=2,
-                dtype=img.dtype, crs=dataset.crs, transform=window_transform) as new_data_set:
-            new_data_set.write(img)#, indexes=2)
-
-        cutout_bounds = rasterio.open(output_tif).bounds
-        extracted_polygon = box(*cutout_bounds)
-        vector_rect_path = os.path.join(output_dir, f'vector_boundary_{counter}.gpkg')
-        vector_boundary = gpd.GeoDataFrame({"geometry":[extracted_polygon]})
-        vector_boundary.to_file(vector_rect_path, driver='GPKG')#, layer='name')
-
-        # PROBLEM COULD BE HERE? 
-
-        if extant_key: 
-            key_gdf = gpd.read_file(key)
-            extracted_geometries = key_gdf['geometry']
-
-            overlapping = extracted_geometries.overlaps(extracted_polygon)[0] # this probably needs to get fixed
-
-        else: 
-            overlapping = False      
-            
-    centroid = [np.median(extent[0:2]), np.median(extent[3:5])]
-
-    if extant_key: 
-        key_gdf = gpd.read_file(key)
-        d = {'geometry':[extracted_polygon]+key_gdf['geometry'].to_list(),
-             'centroidsx':[centroid[0]]+key_gdf['centroidsx'].to_list(), 
-             'centroidsy':[centroid[1]]+key_gdf['centroidsy'].to_list()}
-
-        key_gdf = gpd.GeoDataFrame(d, crs=crs)
-        key_gdf.to_file(key)
-
-    else: 
-        
-        if key is not None: 
-        
-            d = {'geometry':[extracted_polygon], 'centroidsx':[centroid[0]], 'centroidsy':[centroid[1]]}
-            key_gdf = gpd.GeoDataFrame(d, crs=crs) #lines_gdf = gpd.GeoDataFrame({'geometry':lines}, geometry='geometry', crs=annotations_gdf.crs)
-            key_gdf.to_file(key)
-
-    if plot_path is not None: 
-        # load img here using rasterio
-        fig, ax = plt.subplots(figsize=(5,5))
-
-        plot.show(img[0], origin='upper', transform=window_transform, 
-                  extent=extent, interpolation=None, ax=ax, vmin=250, vmax=750, cmap='Greys_r')
-        plot.show(img[1], origin='upper', transform=window_transform, 
-                  extent=extent, interpolation=None, cmap='Reds', ax=ax, alpha=0.5)
-        
-        #blended = lighten_only(np.array([img[0].astype(float)]), np.array([img[1].astype(float)]), opacity=0.5)
-        #ax.plot(blended)
-        
-        ax.set_aspect('equal', 'box')
-        
-        save_fig(plot_path, dpi)
-
-    output_ndvi = os.path.join(output_dir, f'raw_ndvi_{counter}.tif')
-    output_pan = os.path.join(output_dir, f'raw_pan_{counter}.tif')
-
-    cutout_raster = rasterio.open(output_tif)
-    width = cutout_raster.width
-    height = cutout_raster.height
-
-    panImg = np.array([cutout_raster.read(1)])
-    ndviImg = np.array([cutout_raster.read(2)])
-
-    with rasterio.open(output_ndvi, 'w',
-        driver='GTiff', width=width, height=height, count=1,
-        dtype=ndviImg.dtype, crs=cutout_raster.crs, transform=window_transform) as ndvi_dataset:
-        ndvi_dataset.write(ndviImg)#, indexes=2)
-
-    with rasterio.open(output_pan, 'w',
-        driver='GTiff', width=width, height=height, count=1,
-        dtype=panImg.dtype, crs=cutout_raster.crs, transform=window_transform) as pan_dataset:
-        pan_dataset.write(panImg)#, indexes=2)
-
-    cutout_raster.close()
-
-    #return key_gdf
-
 def preprocess(input_data_dir:str, output_data_dir:str): 
 
     r'''
@@ -267,7 +125,6 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     import geopandas as gps
     from cnnheights.preprocessing import extract_overlapping, divide_training_polygons
-    import warnings 
     import numpy as np
     import os 
 
@@ -277,8 +134,15 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     #    if 'gpkg-shm' or 'gpkg-wal' in f: 
     #        os.remove(os.path.join(output_data_dir, f))
 
+    for f in os.listdir(input_data_dir):
+        if 'aux.xml' in f: 
+            os.remove(os.path.join(input_data_dir, f))
+
     input_files = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir)]
-    
+
+    _ = [os.remove(i) for i in input_files if '-shm' in i or '-wal' in i]
+    input_files = [i for i in input_files if '-shm' not in i and '-wal' not in i]
+
     area_files = np.sort([i for i in input_files if 'vector_boundary' in i]) 
     annotation_files = np.sort([i for i in input_files if 'vector_annotation' in i]) 
     raw_ndvi_images = np.sort([i for i in input_files if 'ndvi' in i]) 
@@ -286,18 +150,25 @@ def preprocess(input_data_dir:str, output_data_dir:str):
 
     allAreasWithPolygons = [] 
 
-    print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)]) 
+    #print([len(i) for i in (area_files, annotation_files, raw_ndvi_images, raw_pan_images)]) 
     write_counters = []
     for i in range(len(area_files)): 
+        print(annotation_files[i])
+        annotations_file = annotation_files[i]
         trainingArea = gps.read_file(area_files[i])
-        trainingPolygon = gps.read_file(annotation_files[i])
+        trainingPolygon = gps.read_file(annotations_file)
+    
+        #trainingPolygon['is_valid'] = trainingPolygon['geometry'].is_valid
+        #trainingPolygon = trainingPolygon[trainingPolygon['is_valid']]
+        #trainingPolygon.to_file(area_files)
+
         write_counters.append(int(area_files[i].split('_')[-1].split('.')[0]))
 
         #print(f'Read a total of {trainingPolygon.shape[0]} object polygons and {trainingArea.shape[0]} training areas.')
         #print(f'Polygons will be assigned to training areas in the next steps.') 
 
         #Check if the training areas and the training polygons have the same crs
-        if trainingArea.crs  != trainingPolygon.crs:
+        if trainingArea.crs != trainingPolygon.crs:
             print('Training area CRS does not match training_polygon CRS')
             targetCRS = trainingPolygon.crs #Areas are less in number so conversion should be faster
             trainingArea = trainingArea.to_crs(targetCRS)
@@ -332,241 +203,6 @@ def preprocess(input_data_dir:str, output_data_dir:str):
     #for f in os.listdir(output_data_dir): 
     #    if 'gpkg-shm' or 'gpkg-wal' in f: 
     #        os.remove(os.path.join(output_data_dir, f))
-
-# DEVELOPMENT HIGH LEVEL PREPROCESS FUNCTIONS #
-
-def combined_preprocess(input_data_dir:str, output_data_dir:str): 
-    r'''
-    
-    Arguments
-    -----   
-
-    input_data_dir : str
-        - directory string with f"vector_boundary_{v_id}.gpkg", f"annotations_{vid}.gpkg", f"raw_ndvi_{v_id}.tif", and f"raw_pan_{v_id}.tif" files
-
-    output_data_dir : str
-        - directory into which f"extracted_ndvi_{v_id}.png", f"extracted_pan_{v_id}.png", f"extracted_boundary_{v_id}.png", f"extracted_annotation_{v_id}.png" will be saved. 
-
-    '''
-
-    import geopandas as gpd
-    from functools import partial 
-    from osgeo import gdal, ogr
-    from multiprocessing import Pool
-    import os 
-    from cnnheights.preprocessing import extract_overlapping, divide_training_polygons
-    import warnings 
-    import numpy as np
-    import geopandas as gpd 
-    #warnings.filterwarnings("ignore")
-
-    gdal.UseExceptions()
-    ogr.UseExceptions()
-
-    input_files = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir)]
-    
-    area_files = np.sort([i for i in input_files if 'vector_boundary' in i]) 
-    annotation_files = np.sort([i for i in input_files if 'annotation' in i]) 
-    raw_ndvi_images = np.sort([i for i in input_files if 'raw_ndvi' in i])
-    raw_pan_images = np.sort([i for i in input_files if 'raw_pan' in i])
-
-    total_jobs = len(area_files)
-    n_jobs = np.min([os.cpu_count(), total_jobs])
-
-    def preprocess_single(area_file:str): 
-
-        # STEP 0: GET FILES
-
-        local_dir = '/'.join(area_file.split('/')[:-1])+'/'
-        v_id = area_file.split('_')[-1].split('.')[0]
-
-        trainingArea = gpd.read_file(area_file)
-        trainingPolygon = gpd.read_file(f'{local_dir}annotations_{v_id}.gpkg')
-
-        trainingArea['id'] = range(trainingArea.shape[0])
-
-        # STEP 1: EQUIVALENT OF ORIGINAL PREPROCESS SINGLE
-
-        # areasWithPolygons contains the object polygons and weighted boundaries for each area
-        # GET areasWithPolygons .... originally called like ```areasWithPolygons = divide_training_polygons(trainingPolygon, trainingArea, show_boundaries_during_processing=False)``` 
-
-        cpTrainingPolygon = trainingPolygon.copy()
-        areasWithPolygons = {}
-        for i in trainingArea.index:
-            spTemp = []
-            allocated = []
-            for j in cpTrainingPolygon.index:
-                if trainingArea.loc[i]['geometry'].intersects(cpTrainingPolygon.loc[j]['geometry']):
-                    spTemp.append(cpTrainingPolygon.loc[j])
-                    allocated.append(j)
-
-            # Order of bounds: minx miny maxx maxy
-            
-            # CALCULATE BOUNDARIES...function originally called under preprocess single via ```boundary = calculate_boundary_weight(spTemp, scale_polygon = 1.5, output_plot = False)```
-            scale_polygon = 1.5
-
-            # If there are polygons in a area, the boundary polygons return an empty geo dataframe
-            if not spTemp:
-                return gpd.GeoDataFrame({})
-
-            tempPolygonDf = gpd.GeoDataFrame(spTemp)
-            scaledPolygonDf = tempPolygonDf.scale(xfact=scale_polygon, yfact=scale_polygon, zfact=scale_polygon, origin='centroid')
-            new_c = []
-
-            length = len(scaledPolygonDf.index)
-            counter = 0
-            for i in range(length-1): 
-                left = scaledPolygonDf.iloc[i]
-                for j in range(i+1, length):
-                    right = scaledPolygonDf.iloc[j]
-                    left_intersection = left.intersection(right) # 
-                    counter +=1 
-                    if not left_intersection.is_empty: 
-                        new_c.append(left_intersection)
-
-            new_c = gpd.GeoSeries(new_c)
-            new_cc = gpd.GeoDataFrame({'geometry': new_c})
-            new_cc.columns = ['geometry']
-            boundary = gpd.overlay(new_cc, tempPolygonDf, how='difference')
-
-            #change multipolygon to polygon
-            boundary = boundary.explode()
-            boundary.reset_index(drop=True,inplace=True)
-
-            areasWithPolygons[trainingArea.loc[i]['id']] = {'polygons':spTemp, 'boundaryWeight': boundary, 'bounds':list(trainingArea.bounds.loc[i]),}
-            cpTrainingPolygon = cpTrainingPolygon.drop(allocated)
-        
-        # STEP TWO: EXTRACT ANNOTATIONS (originall second pooled step)
-
-        #areasWithPolygons 
-
-        r'''
-        def extract_overlapping(inputImages, allAreasWithPolygons, writePath, bands, ndviFilename='extracted_ndvi', panFilename='extracted_pan', annotationFilename='extracted_annotation', boundaryFilename='extracted_boundary'):
-            """
-            Iterates over raw ndvi and pan images and using find_overlap() extract areas that overlap with training data. The overlapping areas in raw images are written in a separate file, and annotation and boundary file are created from polygons in the overlapping areas.
-            Note that the intersection with the training areas is performed independently for raw ndvi and pan images. This is not an ideal solution and it can be combined in the future.
-            
-            old name used to be: extractAreasThatOverlapWithTrainingData
-            
-            """
-
-            from cnnheights.utilities import find_overlap
-            import os 
-            import rasterio 
-
-            if not os.path.exists(writePath):
-                os.makedirs(writePath)
-            
-            for i in range(len(inputImages)): 
-                input_images = inputImages[i]
-                areasWithPolygons=allAreasWithPolygons[i]
-                writeCounter=i 
-
-                overlapppedAreas = set()                   
-                ndviImg = rasterio.open(input_images[0])
-                panImg = rasterio.open(input_images[1])
-
-                ncndvi,imOverlapppedAreasNdvi = find_overlap(ndviImg, areasWithPolygons, writePath=writePath, imageFilename=[ndviFilename], annotationFilename=annotationFilename, boundaryFilename=boundaryFilename, bands=bands, writeCounter=writeCounter)
-                ncpan, imOverlapppedAreasPan = find_overlap(panImg, areasWithPolygons, writePath=writePath, imageFilename=[panFilename], annotationFilename='', boundaryFilename='', bands=bands, writeCounter=writeCounter)
-                if ncndvi != ncpan:
-                    
-                    print(ncndvi)
-                    print(ncpan)  
-                    raise Exception('Couldnt create mask!!!')
-
-                if overlapppedAreas.intersection(imOverlapppedAreasNdvi):
-                    print(f'Information: Training area(s) {overlapppedAreas.intersection(imOverlapppedAreasNdvi)} spans over multiple raw images. This is common and expected in many cases. A part was found to overlap with current input image.')
-                overlapppedAreas.update(imOverlapppedAreasNdvi)
-                
-                allAreas = set(areasWithPolygons.keys())
-
-                print(overlapppedAreas)
-                print(allAreas)
-
-                if allAreas.difference(overlapppedAreas):
-                    print(f'Warning: Could not find a raw image corresponding to {allAreas.difference(overlapppedAreas)} areas. Make sure that you have provided the correct paths!')
-        '''
-        
-def better_preprocess(input_data_dir:str, output_data_dir:str):
-    
-    r'''
-    
-    Arguments
-    -----   
-
-    input_data_dir : str
-        - directory string with f"vector_boundary_{v_id}.gpkg", f"annotations_{vid}.gpkg", f"raw_ndvi_{v_id}.tif", and f"raw_pan_{v_id}.tif" files
-
-    output_data_dir : str
-        - directory into which f"extracted_ndvi_{v_id}.png", f"extracted_pan_{v_id}.png", f"extracted_boundary_{v_id}.png", f"extracted_annotation_{v_id}.png" will be saved. 
-
-    '''
-
-    import geopandas as gpd
-    from functools import partial 
-    from osgeo import gdal, ogr
-    from multiprocessing import Pool
-    import os 
-    from cnnheights.preprocessing import extract_overlapping, divide_training_polygons
-    import warnings 
-    import numpy as np
-    #warnings.filterwarnings("ignore")
-    import concurrent.futures
-    import multiprocessing
-    import sys
-    import uuid
-
-    def globalize(func):
-        def result(*args, **kwargs):
-            return func(*args, **kwargs)
-        result.__name__ = result.__qualname__ = uuid.uuid4().hex
-        setattr(sys.modules[result.__module__], result.__name__, result)
-        return result
-
-    gdal.UseExceptions()
-    ogr.UseExceptions()
-
-    input_files = [os.path.join(input_data_dir, i) for i in os.listdir(input_data_dir)]
-    
-    area_files = np.sort([i for i in input_files if 'vector_boundary' in i]) 
-    annotation_files = np.sort([i for i in input_files if 'annotation' in i]) 
-    raw_ndvi_images = np.sort([i for i in input_files if 'raw_ndvi' in i])
-    raw_pan_images = np.sort([i for i in input_files if 'raw_pan' in i])
-
-    total_jobs = len(area_files)
-    n_jobs = np.min([os.cpu_count(), total_jobs])
-    
-    @globalize
-    def preprocess_single(area_file:str): 
-        
-        local_dir = '/'.join(area_file.split('/')[:-1])+'/'
-        v_id = area_file.split('_')[-1].split('.')[0]
-
-        trainingArea = gpd.read_file(area_file)
-        trainingPolygon = gpd.read_file(f'{local_dir}annotations_{v_id}.gpkg')
-
-        trainingArea['id'] = range(trainingArea.shape[0])
-        
-        # areasWithPolygons contains the object polygons and weighted boundaries for each area!
-        areasWithPolygons = divide_training_polygons(trainingPolygon, trainingArea, show_boundaries_during_processing=False)
-        
-        return areasWithPolygons
-
-
-    #print('checking if name is main')
-    print(__name__)
-    
-    if __name__ != 'cnnheights.main':
-        pool = Pool(processes=n_jobs)
-        allAreasWithPolygons = pool.map(preprocess_single, area_files)
-
-        print(allAreasWithPolygons)
-
-        inputImages = list(zip(raw_ndvi_images,raw_pan_images))
-
-        pool = Pool(processes=n_jobs)
-        partial_func = partial(extract_overlapping, inputImages=inputImages, allAreasWithPolygons=allAreasWithPolygons, writePath=output_data_dir, bands=[0])
-        pool.map(partial_func, range(total_jobs))
 
 # CURRENT LOW LEVEL FUNCTIONS USED BY HIGH LEVEL PREPROCESS # 
 
